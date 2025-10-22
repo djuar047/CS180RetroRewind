@@ -1,0 +1,127 @@
+@startuml
+title RetroRewind - UML Class Diagram
+
+'=======================
+' Classes
+'=======================
+class User {
+  - userId : String
+  - username : String
+  - email : String
+  - passwordHash : String
+  - authToken : String
+  --
+  + register()
+  + login()
+  + logout()
+  + updateProfile()
+}
+
+class Profile {
+  - profileId : String
+  - bio : String
+  - avatarURL : String
+  - wishlist : List<MediaItem>
+  - library : List<MediaItem>
+  --
+  + addToWishlist(item : MediaItem)
+  + addToLibrary(item : MediaItem)
+}
+
+class MediaItem {
+  - itemId : String
+  - title : String
+  - year : Int
+  - genre : String
+  - type : String  <<Movie/Game>>
+  - platform : String
+  --
+  + getDetails()
+}
+
+class Rating {
+  - ratingId : String
+  - stars : Int
+  - reviewText : String
+  - dateCreated : Date
+  --
+  + submitRating()
+  + editRating()
+}
+
+class Thread {
+  - threadId : String
+  - title : String
+  - content : String
+  - dateCreated : Date
+  --
+  + createThread()
+  + reply(content : String)
+}
+
+class Comment {
+  - commentId : String
+  - content : String
+  - dateCreated : Date
+  --
+  + postComment()
+}
+
+class SearchEngine {
+  --
+  + searchByTitle(keyword : String)
+  + filterByYear(year : Int)
+  + filterByGenre(genre : String)
+  + filterByPlatform(platform : String)
+}
+
+class AuthService {
+  --
+  + encryptPassword(password : String)
+  + generateToken(userId : String)
+  + verifyToken(token : String)
+}
+
+class Database {
+  --
+  + save(object)
+  + find(query)
+  + update(object)
+  + delete(object)
+}
+
+'=======================
+' Relationships
+'=======================
+User "1" -- "1" Profile
+User "1" -- "many" Thread
+User "1" -- "many" Rating
+Thread "1" -- "many" Comment
+Profile "1" -- "many" MediaItem : has >
+MediaItem "1" -- "many" Rating
+AuthService ..> User : authenticates >
+SearchEngine ..> MediaItem : queries >
+Database ..> User : stores >
+Database ..> MediaItem : stores >
+Database ..> Thread : stores >
+Database ..> Rating : stores >
+
+'=======================
+' Notes
+'=======================
+note right of MediaItem
+Represents both Movies and Games.  
+Data fetched via IGDB (games) or OMDb (movies).
+end note
+
+note right of AuthService
+Implements JWT or Firebase authentication  
+for secure login and session handling.
+end note
+
+note bottom of Database
+MongoDB backend storing  
+all user and media data.
+end note
+
+@enduml
