@@ -35,6 +35,14 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   // err = simple message to tell user if backend isn’t reachable
   const [err, setErr] = useState("");
+  // display ratings in the game cards ratings
+  const [showModal, setShowModal] = useState(false);
+  const [currentGame, setCurrentGame] = useState(null);
+  const [stars, setStars] = useState(0);
+  const [review, setReview] = useState("");
+
+  // for displaying ratings in the UI (local only)
+  const [ratings, setRatings] = useState({});
 
   // When the user submits the search:
   // - prevent page reload
@@ -53,18 +61,14 @@ export default function App() {
     setLoading(true);
     setErr("");
     try {
-      // call our local backend (Flask) which calls IGDB for us
-      const res = await fetch(
-        `http://127.0.0.1:5000/search?q=${encodeURIComponent(query)}`
-      );
-      if (!res.ok) {
-        // if backend gives an error (like 500), throw so we go to catch
-        const text = await res.text();
-        throw new Error(text || `HTTP ${res.status}`);
-      }
-      const data = await res.json();
-      // only set array results; if not an array, show empty
-      setItems(Array.isArray(data) ? data : []);
+      // call our local backend (Flask) which calls IGDB and OMDb
+      const [gamesRes, moviesRes] = await Promise.all([
+      fetch(`http://127.0.0.1:5000/search?q=${encodeURIComponent(query)}`),
+      fetch(`http://127.0.0.1:5000/movies?q=${encodeURIComponent(query)}`)
+    ]);
+      const games = (await gamesRes.json()) || [];
+    const movies = (await moviesRes.json()) || [];
+    setItems([...games, ...movies]);  // merge results
     } catch (e) {
       // backend not running or failed → tell user + fall back to MOCK
       setErr("Backend not reachable — showing sample results.");
@@ -78,6 +82,35 @@ export default function App() {
       setLoading(false);
     }
   }
+// Ratings 
+async function submitRating() {
+    if (!stars) return alert("Please select a star rating first.");
+    try {
+      const res = await fetch("http://127.0.0.1:5000/ratings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          user_id: "1",
+          media_id: currentGame.id,
+          stars,
+          review_text: review,
+        }),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      const data = await res.json();
+      alert("Thanks for rating!");
+      setRatings((prev) => ({
+        ...prev,
+        [currentGame.id]: { stars, review },
+      }));
+      setShowModal(false);
+      setStars(0);
+      setReview("");
+    } catch (e) {
+      alert("Failed to submit rating.");
+    }
+  }
+
 
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100">
@@ -176,9 +209,66 @@ export default function App() {
                   <button className="rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-1.5 text-sm hover:bg-zinc-700">
                     Add to Library
                   </button>
-                  <button className="rounded-lg border border-blue-600 bg-blue-600/10 px-3 py-1.5 text-sm text-blue-300 hover:bg-blue-600/20">
-                    Rate ★
-                  </button>
+{ratings[m.id] && (
+  <div className="mt-3 text-sm text-amber-400">
+    Rated {ratings[m.id].stars} / 5 — "{ratings[m.id].review}"
+  </div>
+)}
+
+<div className="mt-4 flex gap-2">
+  <button
+    className="rounded-lg border border-blue-600 bg-blue-600/10 px-3 py-1.5 text-sm text-blue-300"
+    onClick={() => {
+      setCurrentGame(m);
+      setShowModal(true);
+    }}
+  >
+    Rate ★
+  </button>
+</div>
+{showModal && (
+  <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
+    <div className="bg-zinc-900 p-6 rounded-xl border border-zinc-700 max-w-sm w-full">
+      <h3 className="text-xl font-semibold mb-3">
+        Rate {currentGame?.title}
+      </h3>
+      <div className="flex gap-1 mb-3">
+        {[1, 2, 3, 4, 5].map((s) => (
+          <button
+            key={s}
+            onClick={() => setStars(s)}
+            className={`text-2xl ${
+              s <= stars ? "text-amber-400" : "text-zinc-600"
+            }`}
+          >
+            ★
+          </button>
+        ))}
+      </div>
+      <textarea
+        value={review}
+        onChange={(e) => setReview(e.target.value)}
+        placeholder="Write a short review (optional)"
+        className="w-full rounded-lg bg-zinc-800 border border-zinc-700 px-3 py-2 text-sm mb-4"
+      />
+      <div className="flex justify-end gap-2">
+        <button
+          onClick={() => setShowModal(false)}
+          className="px-3 py-2 text-sm rounded-lg bg-zinc-700 hover:bg-zinc-600"
+        >
+          Cancel
+        </button>
+        <button
+          onClick={submitRating}
+          className="px-3 py-2 text-sm rounded-lg bg-blue-600 hover:bg-blue-500"
+        >
+          Submit
+        </button>
+      </div>
+    </div>
+  </div>
+)}
+
                 </div>
               </div>
             </article>

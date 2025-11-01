@@ -6,9 +6,19 @@ from datetime import datetime, timezone
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from dotenv import load_dotenv
+from pymongo import MongoClient
 
 # load the CLIENT_ID and CLIENT_SECRET from the .env file in the backend folder
 load_dotenv()
+
+# connect to MongoDB 
+MONGO_URI = os.getenv("MONGO_URI")
+if not MONGO_URI:
+    raise RuntimeError("Set MONGO_URI in .env (MongoDB Atlas connection string).")
+
+mongo_client = MongoClient(MONGO_URI)
+db = mongo_client["retro_rewind"]
+
 
 CLIENT_ID = os.getenv("CLIENT_ID")
 CLIENT_SECRET = os.getenv("CLIENT_SECRET")
@@ -113,7 +123,80 @@ def search():
     except Exception as e:
         # if something else breaks in our code
         return jsonify({"error": "server_error", "detail": str(e)}), 500
+# movies searching
+@app.get("/movies")
+def movies():
+    """Search for movies using OMDb API."""
+    q = (request.args.get("q") or "").strip()
+    if not q:
+        return jsonify([])
 
+    try:
+        results = omdb_search_movies(q)
+        return jsonify(results)
+    except requests.HTTPError as e:
+        return jsonify({"error": "omdb_http_error", "detail": str(e)}), 502
+    except Exception as e:
+        return jsonify({"error": "server_error", "detail": str(e)}), 500
+
+# Ratings
+from datetime import datetime
+from bson import ObjectId
+
+@app.post("/ratings")
+def submit_rating():
+    data = request.json
+    user_id = data.get("user_id")
+    media_id = data.get("media_id")
+    stars = data.get("stars")
+    review_text = data.get("review_text", "")
+
+    if not all([user_id, media_id, stars]):
+        return jsonify({"error": "missing_fields"}), 400
+
+    rating = {
+        "user_id": ObjectId(user_id) if ObjectId.is_valid(user_id) else user_id,
+        "media_id": ObjectId(media_id) if ObjectId.is_valid(media_id) else media_id,
+        "stars": int(stars),
+        "review_text": review_text,
+        "date_created": datetime.utcnow()
+    }
+
+    result = db["ratings"].insert_one(rating)
+    return jsonify({"rating_id": str(result.inserted_id)}), 201
+
+
+@app.get("/ratings/<media_id>")
+def get_ratings(media_id):
+    ratings = list(db["ratings"].find({"media_id": media_id}))
+    for r in ratings:
+        r["_id"] = str(r["_id"])
+        r["user_id"] = str(r["user_id"])
+    return jsonify(ratings)
+# omdb api helper
+OMDB_API_KEY = os.getenv("OMDB_API_KEY")
+
+def omdb_search_movies(query: str):
+    """Search OMDb for movies matching the query."""
+    url = f"https://www.omdbapi.com/?apikey={OMDB_API_KEY}&s={query}&type=movie"
+    r = requests.get(url, timeout=15)
+    r.raise_for_status()
+    data = r.json()
+    # OMDb returns {'Response': 'False', 'Error': 'Movie not found!'} if none found
+    if data.get("Response") != "True":
+        return []
+    results = []
+    for m in data.get("Search", []):
+        results.append({
+            "id": m.get("imdbID"),
+            "title": m.get("Title"),
+            "year": m.get("Year"),
+            "platforms": ["Theaters", "Streaming"],
+            "summary": "No summary available (use IMDb for more info).",
+            "coverUrl": m.get("Poster") if m.get("Poster") != "N/A" else "https://placehold.co/200x280?text=No+Poster",
+            "type": "Movie",
+        })
+    return results
 
 @app.get("/")
 def health():
