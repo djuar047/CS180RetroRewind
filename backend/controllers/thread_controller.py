@@ -1,14 +1,10 @@
 from flask import jsonify, request
-from pymongo import MongoClient
 from models.thread_model import Thread
+from app import db  # ✅ use the shared database
 
-# Connect to MongoDB (make sure MongoDB is running locally)
-client = MongoClient("mongodb://localhost:27017/")
-db = client["retrorewind"]
 threads_collection = db["threads"]
 
 def create_thread():
-    """Create a new thread."""
     data = request.get_json()
     title = data.get("title")
     content = data.get("content")
@@ -19,11 +15,9 @@ def create_thread():
 
     new_thread = Thread(title, content, user_id)
     threads_collection.insert_one(new_thread.to_dict())
-
     return jsonify({"message": "Thread created successfully"}), 201
 
 def get_all_threads():
-    """Fetch all threads."""
     threads = list(threads_collection.find({}, {"_id": 0}))
     return jsonify(threads), 200
 
