@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en" class="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <!-- my project name + team name shows up on the browser tab -->
+    <title>RetroRewind • Team Bear 180</title>
+
+    <!-- bear icon for the tab (can change later if we get a better one) -->
+    <link rel="icon" type="image/png" href="/src/assets/bear.webp" />
+
+    <!-- this just makes sure dark mode is always on -->
+    <script>
+      document.documentElement.classList.add('dark');
+    </script>
+  </head>
+
+  <!-- dark background + smooth text -->
+  <body class="bg-ink text-zinc-100 antialiased">
+    <!-- this is where React puts all the stuff -->
+    <div id="root"></div>
+
+    <!-- main React file that starts everything -->
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>
+
