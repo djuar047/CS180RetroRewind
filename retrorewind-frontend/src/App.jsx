@@ -44,6 +44,41 @@ export default function App() {
   // for displaying ratings in the UI (local only)
   const [ratings, setRatings] = useState({});
 
+  // --- NEW: simple search filters that user can change ---
+  const [typeFilter, setTypeFilter] = useState("All");   // shows all by default, or pick “Game” or “Movie”
+  const [yearFrom, setYearFrom] = useState("");          // the earliest year to show
+  const [yearTo, setYearTo] = useState("");              // the latest year to show
+  const [platformFilter, setPlatformFilter] = useState(""); // find results that match this platform (ex: “Xbox”)
+  // ---------------------------
+
+  // --- NEW: filter helper (used to narrow down the search results) ---
+  function applyFilters(list) {
+    const yf = parseInt(yearFrom, 10);
+    const yt = parseInt(yearTo, 10);
+
+    return (list || []).filter((it) => {
+      // filter by type (Game / Movie)
+      if (typeFilter !== "All") {
+        if ((it.type || "").toLowerCase() !== typeFilter.toLowerCase()) return false;
+      }
+      // filter by year range if given(read first 4 chars)
+      if ((yearFrom || yearTo) && it.year && it.year !== "—") {
+        const y = parseInt(String(it.year).slice(0, 4), 10);
+        if (Number.isInteger(yf) && y < yf) return false;
+        if (Number.isInteger(yt) && y > yt) return false;
+      }
+      // filter by platform (checks if platform name includes the search text)
+      if (platformFilter.trim()) {
+        const p = platformFilter.trim().toLowerCase();
+        const arr = Array.isArray(it.platforms) ? it.platforms : [];
+        const hit = arr.some((name) => (name || "").toLowerCase().includes(p));
+        if (!hit) return false;
+      }
+      return true;
+    });
+  }
+  // --------------------------------------------------
+
   // When the user submits the search:
   // - prevent page reload
   // - if box is empty, clear results
@@ -68,13 +103,15 @@ export default function App() {
     ]);
       const games = (await gamesRes.json()) || [];
     const movies = (await moviesRes.json()) || [];
-    setItems([...games, ...movies]);  // merge results
+    setItems(applyFilters([...games, ...movies]));  // merge + filter
     } catch (e) {
       // backend not running or failed → tell user + fall back to MOCK
       setErr("Backend not reachable — showing sample results.");
       setItems(
-        MOCK_RESULTS.filter((m) =>
-          m.title.toLowerCase().includes(query.toLowerCase())
+        applyFilters(
+          MOCK_RESULTS.filter((m) =>
+            m.title.toLowerCase().includes(query.toLowerCase())
+          )
         )
       );
     } finally {
@@ -82,6 +119,12 @@ export default function App() {
       setLoading(false);
     }
   }
+  // --- NEW: apply filters again without re-searching ---
+  function reapplyFilters() {
+    setItems((prev) => applyFilters(prev));
+  }
+  // -----------------------------------------------------
+
 // Ratings 
 async function submitRating() {
     if (!stars) return alert("Please select a star rating first.");
@@ -165,6 +208,67 @@ async function submitRating() {
               {loading ? "Searching…" : "Search"}
             </button>
           </form>
+
+          {/* --- NEW: quick filter controls shown under the search bar --- */}
+          <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
+            {/* dropdown to choose type (shows all by default) */}
+            <select
+              value={typeFilter}
+              onChange={(e) => setTypeFilter(e.target.value)}
+              className="rounded-xl bg-zinc-900/70 border border-zinc-800 px-3 py-2"
+              title="Type"
+            >
+              <option>All</option>
+              <option>Game</option>
+              <option>Movie</option>
+            </select>
+
+            {/* box for starting year (oldest year to include) */}
+            <input
+              inputMode="numeric"
+              pattern="[0-9]*"
+              value={yearFrom}
+              onChange={(e) =>
+                setYearFrom(e.target.value.replace(/\D/g, "").slice(0, 4))
+              }
+              placeholder="Year from"
+              className="rounded-xl bg-zinc-900/70 border border-zinc-800 px-3 py-2"
+              title="Start year"
+            />
+
+            {/* box for ending year (latest year to include) */}
+            <input
+              inputMode="numeric"
+              pattern="[0-9]*"
+              value={yearTo}
+              onChange={(e) =>
+                setYearTo(e.target.value.replace(/\D/g, "").slice(0, 4))
+              }
+              placeholder="Year to"
+              className="rounded-xl bg-zinc-900/70 border border-zinc-800 px-3 py-2"
+              title="End year"
+            />
+
+            {/* text box for typing a platform name (like Xbox or Wii) */}
+            <input
+              value={platformFilter}
+              onChange={(e) => setPlatformFilter(e.target.value)}
+              placeholder="Platform (e.g., Xbox)"
+              className="rounded-xl bg-zinc-900/70 border border-zinc-800 px-3 py-2"
+              title="Platform"
+            />
+
+            {/* button that re-filters what’s already loaded (no new search call) */}
+            <button
+              type="button"
+              onClick={reapplyFilters}
+              className="rounded-xl border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm hover:bg-zinc-700"
+              title="Filter current results"
+            >
+              Apply Filters
+            </button>
+          </div>
+          {/* ------------------------------------------------ */}
 
           {/* small warning if backend is down (we still show mock results) */}
           {err && (
