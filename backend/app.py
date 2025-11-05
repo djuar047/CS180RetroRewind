@@ -1,4 +1,3 @@
-# app.py
 import os
 import time
 import requests
@@ -8,17 +7,20 @@ from flask_cors import CORS
 from dotenv import load_dotenv
 from pymongo import MongoClient
 from bson import ObjectId
+
+# Routes
+from routes.thread_routes import thread_bp
+from routes.comment_routes import comment_bp
 from user import User
 from profile import Profile
 
-# load the CLIENT_ID and CLIENT_SECRET from the .env file in the backend folder
+# Load environment
 load_dotenv()
 
-# connect to MongoDB 
+# MongoDB setup
 MONGO_URI = os.getenv("MONGO_URI")
 if not MONGO_URI:
-    raise RuntimeError("Set MONGO_URI in .env (MongoDB Atlas connection string).")
-
+    raise RuntimeError("Missing MONGO_URI in .env")
 mongo_client = MongoClient(MONGO_URI)
 db = mongo_client["retro_rewind"]
 
@@ -31,16 +33,17 @@ secondary_db = secondary_client["analytics_db"]  # or whatever DB you want
 
 CLIENT_ID = os.getenv("CLIENT_ID")
 CLIENT_SECRET = os.getenv("CLIENT_SECRET")
-
-# make sure both are actually set or stop the app
+OMDB_API_KEY = os.getenv("OMDB_API_KEY")
 if not CLIENT_ID or not CLIENT_SECRET:
-    raise RuntimeError("Set CLIENT_ID and CLIENT_SECRET in backend/.env (no quotes, no spaces).")
+    raise RuntimeError("Missing CLIENT_ID/CLIENT_SECRET in .env")
 
-# set up the Flask web app + allow requests from our React frontend
+# Flask setup
 app = Flask(__name__)
 CORS(app, resources={r"/*": {"origins": ["http://localhost:5173", "http://127.0.0.1:5173"]}})
+app.register_blueprint(thread_bp)
+app.register_blueprint(comment_bp)
 
-# store the access token here so we don’t have to request a new one every time
+# Token cache for IGDB
 _token_cache = {"value": None, "expires_at": 0}
 
 # Add a route to register a new user
@@ -137,45 +140,29 @@ def update_profile(user_id):
     return jsonify({"message": "Profile updated"})
 
 def get_access_token() -> str:
-    """Get a Twitch access token for IGDB API (reuses one if it's still valid)."""
     now = time.time()
-    # if we already have a valid token, just reuse it
     if _token_cache["value"] and _token_cache["expires_at"] > now + 60:
         return _token_cache["value"]
-
-    # otherwise, request a new one from Twitch
     url = "https://id.twitch.tv/oauth2/token"
-    params = {
-        "client_id": CLIENT_ID,
-        "client_secret": CLIENT_SECRET,
-        "grant_type": "client_credentials",
-    }
+    params = {"client_id": CLIENT_ID, "client_secret": CLIENT_SECRET, "grant_type": "client_credentials"}
     r = requests.post(url, params=params, timeout=15)
     r.raise_for_status()
     data = r.json()
-    # save token + when it expires
     _token_cache["value"] = data["access_token"]
     _token_cache["expires_at"] = now + data.get("expires_in", 3600)
     return _token_cache["value"]
 
 
 def igdb_search_games(query: str, token: str):
-    """Send a search request to IGDB for games matching the user’s search."""
     url = "https://api.igdb.com/v4/games"
     headers = {"Client-ID": CLIENT_ID, "Authorization": f"Bearer {token}"}
-    # ask IGDB for name, release date, platforms, summary, and cover image
-    body = f'''
-      search "{query}";
-      fields name, first_release_date, platforms.name, summary, cover.image_id;
-      limit 12;
-    '''
+    body = f'search "{query}"; fields name, first_release_date, platforms.name, summary, cover.image_id; limit 12;'
     r = requests.post(url, headers=headers, data=body, timeout=20)
     r.raise_for_status()
     return r.json()
 
 
 def fmt_unix_date(ts):
-    """Turn the weird timestamp (seconds since 1970) into a readable date."""
     if not ts:
         return None
     try:
@@ -185,27 +172,21 @@ def fmt_unix_date(ts):
 
 
 def cover_url(image_id):
-    """Build a full image URL from IGDB’s image ID (or use a placeholder)."""
     return (
-        f"https://images.igdb.com/igdb/image/upload/t_cover_small_2x/{image_id}.jpg"
-        if image_id else
-        "https://placehold.co/200x280?text=No+Cover"
+        f"https://images.igdb.com/igdb/image/upload/t_cover_small_2/{image_id}.jpg"
+        if image_id
+        else "https://placehold.co/200x280?text=No+Cover"
     )
 
 
 @app.get("/search")
 def search():
-    """Main endpoint — frontend calls this when user searches for a game."""
     q = (request.args.get("q") or "").strip()
     if not q:
         return jsonify([])
-
     try:
-        # get a valid token + search IGDB
         token = get_access_token()
         raw = igdb_search_games(q, token)
-
-        # clean up and format the results to match what React expects
         items = []
         for g in raw:
             items.append({
@@ -219,30 +200,43 @@ def search():
             })
         return jsonify(items)
     except requests.HTTPError as e:
-        # if IGDB errors out (like rate limit or bad token)
         return jsonify({"error": "igdb_http_error", "detail": str(e)}), 502
     except Exception as e:
-        # if something else breaks in our code
         return jsonify({"error": "server_error", "detail": str(e)}), 500
-# movies searching
+
+
+def omdb_search_movies(query: str):
+    url = f"https://www.omdbapi.com/?apikey={OMDB_API_KEY}&s={query}"
+    r = requests.get(url, timeout=15)
+    r.raise_for_status()
+    data = r.json()
+    if data.get("Response") != "True":
+        return []
+    results = []
+    for m in data.get("Search", []):
+        results.append({
+            "id": m.get("imdbID"),
+            "title": m.get("Title"),
+            "year": m.get("Year"),
+            "platforms": ["Theaters", "Streaming"],
+            "summary": "No summary available.",
+            "coverUrl": m.get("Poster") if m.get("Poster") != "N/A" else "https://placehold.co/200x280?text=No+Cover",
+            "type": "Movie",
+        })
+    return results
+
+
 @app.get("/movies")
 def movies():
-    """Search for movies using OMDb API."""
     q = (request.args.get("q") or "").strip()
     if not q:
         return jsonify([])
-
     try:
         results = omdb_search_movies(q)
         return jsonify(results)
-    except requests.HTTPError as e:
-        return jsonify({"error": "omdb_http_error", "detail": str(e)}), 502
     except Exception as e:
         return jsonify({"error": "server_error", "detail": str(e)}), 500
 
-# Ratings
-from datetime import datetime
-from bson import ObjectId
 
 @app.post("/ratings")
 def submit_rating():
@@ -251,7 +245,6 @@ def submit_rating():
     media_id = data.get("media_id")
     stars = data.get("stars")
     review_text = data.get("review_text", "")
-
     if not all([user_id, media_id, stars]):
         return jsonify({"error": "missing_fields"}), 400
 
@@ -262,7 +255,6 @@ def submit_rating():
         "review_text": review_text,
         "date_created": datetime.utcnow()
     }
-
     result = db["ratings"].insert_one(rating)
     return jsonify({"rating_id": str(result.inserted_id)}), 201
 
@@ -274,39 +266,13 @@ def get_ratings(media_id):
         r["_id"] = str(r["_id"])
         r["user_id"] = str(r["user_id"])
     return jsonify(ratings)
-# omdb api helper
-OMDB_API_KEY = os.getenv("OMDB_API_KEY")
 
-def omdb_search_movies(query: str):
-    """Search OMDb for movies matching the query."""
-    url = f"https://www.omdbapi.com/?apikey={OMDB_API_KEY}&s={query}&type=movie"
-    r = requests.get(url, timeout=15)
-    r.raise_for_status()
-    data = r.json()
-    # OMDb returns {'Response': 'False', 'Error': 'Movie not found!'} if none found
-    if data.get("Response") != "True":
-        return []
-    results = []
-    for m in data.get("Search", []):
-        results.append({
-            "id": m.get("imdbID"),
-            "title": m.get("Title"),
-            "year": m.get("Year"),
-            "platforms": ["Theaters", "Streaming"],
-            "summary": "No summary available (use IMDb for more info).",
-            "coverUrl": m.get("Poster") if m.get("Poster") != "N/A" else "https://placehold.co/200x280?text=No+Poster",
-            "type": "Movie",
-        })
-    return results
 
 @app.get("/")
 def health():
-    """Simple test route to confirm backend is running."""
     return jsonify({"ok": True})
 
 
 if __name__ == "__main__":
-    # run the backend locally for development
     app.run(host="127.0.0.1", port=5000, debug=True)
-
 
