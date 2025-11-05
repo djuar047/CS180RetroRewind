@@ -11,6 +11,8 @@ from bson import ObjectId
 # Routes
 from routes.thread_routes import thread_bp
 from routes.comment_routes import comment_bp
+from user import User
+from profile import Profile
 
 # Load environment
 load_dotenv()
@@ -22,7 +24,13 @@ if not MONGO_URI:
 mongo_client = MongoClient(MONGO_URI)
 db = mongo_client["retro_rewind"]
 
-# API keys
+SECONDARY_DB_URI = os.getenv("SECONDARY_DB_URI")  # add this to .env
+if not SECONDARY_DB_URI:
+    raise RuntimeError("Set SECONDARY_DB_URI in .env")
+
+secondary_client = MongoClient(SECONDARY_DB_URI)
+secondary_db = secondary_client["analytics_db"]  # or whatever DB you want
+
 CLIENT_ID = os.getenv("CLIENT_ID")
 CLIENT_SECRET = os.getenv("CLIENT_SECRET")
 OMDB_API_KEY = os.getenv("OMDB_API_KEY")
@@ -38,6 +46,98 @@ app.register_blueprint(comment_bp)
 # Token cache for IGDB
 _token_cache = {"value": None, "expires_at": 0}
 
+# Add a route to register a new user
+@app.post("/register")
+def register():
+    data = request.json
+    username = data.get("username")
+    email = data.get("email")
+    password = data.get("password")
+    
+    if not all([username, email, password]):
+        return jsonify({"error": "missing_fields"}), 400
+
+    # Check if email already exists
+    if db["users"].find_one({"email": email}):
+        return jsonify({"error": "email_exists"}), 400
+
+    # Create user and profile
+    user = User(user_id=str(ObjectId()), username=username, email=email, password=password)
+    db["users"].insert_one({
+        "_id": ObjectId(user.user_id),
+        "username": user.username,
+        "email": user.email,
+        "password": user.password_hash,
+        "profile": {"bio": user.profile.bio, "avatar_url": user.profile.avatar_url, "wishlist": [], "library": []}
+    })
+
+    return jsonify({"message": "User registered", "user_id": user.user_id}), 201
+
+
+# Login route
+@app.post("/login")
+def login():
+    data = request.json
+    email = data.get("email")
+    password = data.get("password")
+
+    if not all([email, password]):
+        return jsonify({"error": "missing_fields"}), 400
+
+    user_doc = db["users"].find_one({"email": email})
+    if not user_doc or user_doc["password"] != password:
+        return jsonify({"error": "invalid_credentials"}), 401
+
+    # create token
+    token = f"token_{str(user_doc['_id'])}"
+    db["users"].update_one({"_id": user_doc["_id"]}, {"$set": {"auth_token": token}})
+
+    # push info to secondary database
+    secondary_db["login_history"].insert_one({
+        "user_id": str(user_doc["_id"]),
+        "username": user_doc["username"],
+        "email": user_doc["email"],
+        "login_time": datetime.utcnow(),
+        "auth_token": token
+    })
+
+    return jsonify({"message": "Login successful", "auth_token": token, "user_id": str(user_doc["_id"])})
+
+# Get profile
+@app.get("/profile/<user_id>")
+def get_profile(user_id):
+    user_doc = db["users"].find_one({"_id": ObjectId(user_id)})
+    if not user_doc:
+        return jsonify({"error": "user_not_found"}), 404
+
+    profile = user_doc.get("profile", {})
+    return jsonify({
+        "username": user_doc["username"],
+        "email": user_doc["email"],
+        "bio": profile.get("bio", ""),
+        "avatar_url": profile.get("avatar_url", ""),
+        "wishlist": profile.get("wishlist", []),
+        "library": profile.get("library", [])
+    })
+
+
+# Update profile
+@app.post("/profile/<user_id>/update")
+def update_profile(user_id):
+    data = request.json
+    new_username = data.get("username")
+    new_email = data.get("email")
+    bio = data.get("bio")
+    avatar_url = data.get("avatar_url")
+
+    updates = {}
+    if new_username: updates["username"] = new_username
+    if new_email: updates["email"] = new_email
+    if bio is not None: updates["profile.bio"] = bio
+    if avatar_url is not None: updates["profile.avatar_url"] = avatar_url
+
+    db["users"].update_one({"_id": ObjectId(user_id)}, {"$set": updates})
+    return jsonify({"message": "Profile updated"})
 
 def get_access_token() -> str:
     now = time.time()
