@@ -6,6 +6,9 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 from dotenv import load_dotenv
 from pymongo import MongoClient
+from firebase_setup import db, auth, bucket
+from authorization import create_user, verify_token
+from authorization_paths import auth_blueprint
 from bson import ObjectId
 
 # Routes
@@ -46,6 +49,8 @@ app.register_blueprint(comment_bp)
 # Token cache for IGDB
 _token_cache = {"value": None, "expires_at": 0}
 
+# register the authorization routes
+app.register_blueprint(auth_blueprint, url_prefix="/auth")
 # Add a route to register a new user
 @app.post("/register")
 def register():
@@ -276,3 +281,5 @@ def health():
 if __name__ == "__main__":
     app.run(host="127.0.0.1", port=5000, debug=True)
 
+
+db.collection("test").add({"hello": "world"})
