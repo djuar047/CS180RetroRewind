@@ -51,6 +51,7 @@ _token_cache = {"value": None, "expires_at": 0}
 
 # register the authorization routes
 app.register_blueprint(auth_blueprint, url_prefix="/auth")
+
 # Add a route to register a new user
 @app.post("/register")
 def register():
@@ -143,6 +144,7 @@ def update_profile(user_id):
 
     db["users"].update_one({"_id": ObjectId(user_id)}, {"$set": updates})
     return jsonify({"message": "Profile updated"})
+
 
 def get_access_token() -> str:
     now = time.time()
@@ -281,5 +283,3 @@ def health():
 if __name__ == "__main__":
     app.run(host="127.0.0.1", port=5000, debug=True)
 
-
-db.collection("test").add({"hello": "world"})
