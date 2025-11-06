@@ -7,6 +7,9 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 from dotenv import load_dotenv
 from pymongo import MongoClient
+from firebase_setup import db, auth, bucket
+from authorization import create_user, verify_token
+from authorization_paths import auth_blueprint
 
 # load the CLIENT_ID and CLIENT_SECRET from the .env file in the backend folder
 load_dotenv()
@@ -34,6 +37,8 @@ CORS(app, resources={r"/*": {"origins": ["http://localhost:5173", "http://127.0.
 # store the access token here so we don’t have to request a new one every time
 _token_cache = {"value": None, "expires_at": 0}
 
+# register the authorization routes
+app.register_blueprint(auth_blueprint, url_prefix="/auth")
 
 def get_access_token() -> str:
     """Get a Twitch access token for IGDB API (reuses one if it's still valid)."""
@@ -209,3 +214,4 @@ if __name__ == "__main__":
     app.run(host="127.0.0.1", port=5000, debug=True)
 
 
+db.collection("test").add({"hello": "world"})
