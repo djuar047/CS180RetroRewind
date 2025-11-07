@@ -1,32 +1,31 @@
 import { useState } from "react";
 import bear from "./assets/bear.webp";
+// NEW: allow in-app links + route definitions
+import { Routes, Route, Link } from "react-router-dom";
+// NEW: simple pages
+import Login from "./Login.jsx";
+import Profile from "./Profile.jsx";
 
-// MOCK data to show something if the backend isn't running.
-// (Only used as a fallback inside the catch block.)
-const MOCK_RESULTS = [
-  {
-    id: "1",
-    title: "Halo: Combat Evolved",
-    year: "2001-11-15",
-    platforms: ["Xbox", "PC (Windows)"],
-    summary:
-      "Fight for humanity against the Covenant on the ancient ring-world Halo.",
-    coverUrl: "https://placehold.co/200x280?text=HALO",
-    type: "Game",
-  },
-  {
-    id: "2",
-    title: "The Matrix",
-    year: "1999-03-31",
-    platforms: ["Theaters", "Blu-ray"],
-    summary:
-      "A hacker discovers reality is a simulated construct in this genre-defining film.",
-    coverUrl: "https://placehold.co/200x280?text=MATRIX",
-    type: "Movie",
-  },
-];
-
+/**
+ * App: tiny router shell that swaps pages.
+ * - "/"       -> Home (our existing screen)
+ * - "/login"  -> Login
+ * - "/profile"-> Profile
+ */
 export default function App() {
+  return (
+    <Routes>
+      <Route path="/" element={<Home />} />
+      <Route path="/login" element={<Login />} />
+      <Route path="/profile" element={<Profile />} />
+    </Routes>
+  );
+}
+
+/**
+ * Home: this is your original App UI.
+ */
+function Home() {
   // q = what the user typed in the search box
   const [q, setQ] = useState("");
   // items = list of results we show in the UI (from backend or mock)
@@ -79,6 +78,31 @@ export default function App() {
   }
   // --------------------------------------------------
 
+  // MOCK data to show something if the backend isn't running.
+  // (Only used as a fallback inside the catch block.)
+  const MOCK_RESULTS = [
+    {
+      id: "1",
+      title: "Halo: Combat Evolved",
+      year: "2001-11-15",
+      platforms: ["Xbox", "PC (Windows)"],
+      summary:
+        "Fight for humanity against the Covenant on the ancient ring-world Halo.",
+      coverUrl: "https://placehold.co/200x280?text=HALO",
+      type: "Game",
+    },
+    {
+      id: "2",
+      title: "The Matrix",
+      year: "1999-03-31",
+      platforms: ["Theaters", "Blu-ray"],
+      summary:
+        "A hacker discovers reality is a simulated construct in this genre-defining film.",
+      coverUrl: "https://placehold.co/200x280?text=MATRIX",
+      type: "Movie",
+    },
+  ];
+
   // When the user submits the search:
   // - prevent page reload
   // - if box is empty, clear results
@@ -98,12 +122,12 @@ export default function App() {
     try {
       // call our local backend (Flask) which calls IGDB and OMDb
       const [gamesRes, moviesRes] = await Promise.all([
-      fetch(`http://127.0.0.1:5000/search?q=${encodeURIComponent(query)}`),
-      fetch(`http://127.0.0.1:5000/movies?q=${encodeURIComponent(query)}`)
-    ]);
+        fetch(`http://127.0.0.1:5000/search?q=${encodeURIComponent(query)}`),
+        fetch(`http://127.0.0.1:5000/movies?q=${encodeURIComponent(query)}`)
+      ]);
       const games = (await gamesRes.json()) || [];
-    const movies = (await moviesRes.json()) || [];
-    setItems(applyFilters([...games, ...movies]));  // merge + filter
+      const movies = (await moviesRes.json()) || [];
+      setItems(applyFilters([...games, ...movies]));  // merge + filter
     } catch (e) {
       // backend not running or failed → tell user + fall back to MOCK
       setErr("Backend not reachable — showing sample results.");
@@ -125,8 +149,8 @@ export default function App() {
   }
   // -----------------------------------------------------
 
-// Ratings 
-async function submitRating() {
+  // Ratings 
+  async function submitRating() {
     if (!stars) return alert("Please select a star rating first.");
     try {
       const res = await fetch("http://127.0.0.1:5000/ratings", {
@@ -154,7 +178,6 @@ async function submitRating() {
     }
   }
 
-
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100">
       {/* Top bar with logo + app name */}
@@ -175,10 +198,28 @@ async function submitRating() {
             </div>
           </div>
 
-          {/* Tiny team tag on the right */}
-          <span className="hidden sm:inline text-xs font-medium text-zinc-400">
-            Team <span className="text-amber-400">Bear 180</span>
-          </span>
+          {/* Right side: keep team tag + add nav buttons */}
+          <div className="hidden sm:flex items-center gap-3">
+            <span className="text-xs font-medium text-zinc-400">
+              Team <span className="text-amber-400">Bear 180</span>
+            </span>
+
+            {/* NEW: go to login */}
+            <Link
+              to="/login"
+              className="rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-1.5 text-sm hover:bg-zinc-700"
+            >
+              Login
+            </Link>
+
+            {/* NEW: go to profile */}
+            <Link
+              to="/profile"
+              className="rounded-lg border border-blue-600 bg-blue-600/10 px-3 py-1.5 text-sm text-blue-300 hover:bg-blue-600/20"
+            >
+              Profile
+            </Link>
+          </div>
         </div>
       </header>
 
