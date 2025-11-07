@@ -178,7 +178,7 @@ def fmt_unix_date(ts):
 
 def cover_url(image_id):
     return (
-        f"https://images.igdb.com/igdb/image/upload/t_cover_small/{image_id}.jpg"
+        f"https://images.igdb.com/igdb/image/upload/t_cover_small_2x/{image_id}.jpg"
         if image_id
         else "https://placehold.co/200x280?text=No+Cover"
     )
