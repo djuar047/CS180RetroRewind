@@ -4,10 +4,14 @@ import { Routes, Route, Link } from "react-router-dom";
 import bear from "./assets/bear.webp";
 import Login from "./Login.jsx";
 import Profile from "./Profile.jsx";
+<<<<<<< HEAD
 import CommunityThreads from "./pages/CommunityThreads.jsx";
 import ThreadDetail from "./pages/ThreadDetail.jsx";
 
 
+=======
+import CreateAccount from "./CreateAccount.jsx";
+>>>>>>> 133dd61 (create account button/functionality)
 
 /**
  * App: tiny router shell that swaps pages.
@@ -21,6 +25,7 @@ export default function App() {
       <Route path="/" element={<Home />} />
       <Route path="/login" element={<Login />} />
       <Route path="/profile" element={<Profile />} />
+      <Route path="/createAccount" element={<CreateAccount />} />
     </Routes>
   );
 }
@@ -210,10 +215,11 @@ function Home() {
 
 
           {/* Right side: keep team tag + add nav buttons */}
-          <div className="hidden sm:flex items-center gap-3">
+          <div className="flex items-center gap-3">
             <span className="text-xs font-medium text-zinc-400">
               Team <span className="text-amber-400">Bear 180</span>
             </span>
+<<<<<<< HEAD
 
             <div className="flex-1 flex justify-center">
               <Link
@@ -227,10 +233,19 @@ function Home() {
 
 
 
+=======
+            {/* NEW: go to create account */}
+            <Link
+              to="/createAccount"
+              className="rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm font-medium hover:bg-zinc-700 transition"
+            >
+              Create Account
+            </Link>
+>>>>>>> 133dd61 (create account button/functionality)
             {/* NEW: go to login */}
             <Link
               to="/login"
-              className="rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-1.5 text-sm hover:bg-zinc-700"
+              className="rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm font-medium hover:bg-zinc-700 transition"
             >
               Login
             </Link>
@@ -238,7 +253,7 @@ function Home() {
             {/* NEW: go to profile */}
             <Link
               to="/profile"
-              className="rounded-lg border border-blue-600 bg-blue-600/10 px-3 py-1.5 text-sm text-blue-300 hover:bg-blue-600/20"
+              className="rounded-lg border border-blue-600 bg-blue-600/10 px-3 py-2 text-sm font-medium text-blue-300 hover:bg-blue-600/20 transition"
             >
               Profile
             </Link>
@@ -459,11 +474,3 @@ function Home() {
     </div>
   );
 }
-
-
-
-
-
-
-
-

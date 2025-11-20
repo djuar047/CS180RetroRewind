@@ -1,22 +1,37 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 
 export default function Login() {
   // Store user input
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const navigate = useNavigate(); // hook to navigate programmatically
+
 
   // Temporary message for testing
   const [message, setMessage] = useState("");
 
   // Simple login button just to test the UI for now
-  function handleLogin(e) {
+  async function handleLogin(e) {
     e.preventDefault();
-    if (!email || !password) {
-      setMessage("Please enter both email and password.");
-      return;
+    try {
+      const res = await fetch("http://127.0.0.1:5000/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }), // make sure you send email
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) throw new Error(data.error || "Login failed");
+
+      alert(data.message); // optional: show success message
+      navigate("/"); // redirect to home page
+    } catch (err) {
+      alert(err.message || "Login failed, try again.");
     }
-    setMessage(`Logged in as ${email}`);
   }
+
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-zinc-950 text-zinc-100">
