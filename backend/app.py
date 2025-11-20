@@ -52,6 +52,8 @@ _token_cache = {"value": None, "expires_at": 0}
 # register the authorization routes
 app.register_blueprint(auth_blueprint, url_prefix="/auth")
 # Add a route to register a new user
+import bcrypt
+
 @app.post("/register")
 def register():
     data = request.json
@@ -66,18 +68,20 @@ def register():
     if db["users"].find_one({"email": email}):
         return jsonify({"error": "email_exists"}), 400
 
-    # Create user and profile
+    # hash the password
+    hashed_pw = bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt())
+
+    # create user and save hashed password
     user = User(user_id=str(ObjectId()), username=username, email=email, password=password)
     db["users"].insert_one({
         "_id": ObjectId(user.user_id),
         "username": user.username,
         "email": user.email,
-        "password": user.password_hash,
+        "password": hashed_pw.decode("utf-8"),  # save as string
         "profile": {"bio": user.profile.bio, "avatar_url": user.profile.avatar_url, "wishlist": [], "library": []}
     })
 
     return jsonify({"message": "User registered", "user_id": user.user_id}), 201
-
 
 # Login route
 @app.post("/login")
@@ -90,14 +94,19 @@ def login():
         return jsonify({"error": "missing_fields"}), 400
 
     user_doc = db["users"].find_one({"email": email})
-    if not user_doc or user_doc["password"] != password:
+    if not user_doc:
+        return jsonify({"error": "invalid_credentials"}), 401
+
+    # check hashed password
+    hashed_pw = user_doc["password"].encode("utf-8")
+    if not bcrypt.checkpw(password.encode("utf-8"), hashed_pw):
         return jsonify({"error": "invalid_credentials"}), 401
 
     # create token
     token = f"token_{str(user_doc['_id'])}"
     db["users"].update_one({"_id": user_doc["_id"]}, {"$set": {"auth_token": token}})
 
-    # push info to secondary database
+    # log login to secondary DB
     secondary_db["login_history"].insert_one({
         "user_id": str(user_doc["_id"]),
         "username": user_doc["username"],
@@ -143,6 +152,22 @@ def update_profile(user_id):
 
     db["users"].update_one({"_id": ObjectId(user_id)}, {"$set": updates})
     return jsonify({"message": "Profile updated"})
+
+@app.post("/profile/<user_id>/library/add")
+def add_to_library(user_id):
+    data = request.json
+    media = {
+        "id": data.get("id"),
+        "title": data.get("title"),
+        "type": data.get("type"),
+        "year": data.get("year"),
+        "coverUrl": data.get("coverUrl")
+    }
+    db["users"].update_one(
+        {"_id": ObjectId(user_id)},
+        {"$push": {"profile.library": media}}
+    )
+    return jsonify({"message": "Added to library"})
 
 def get_access_token() -> str:
     now = time.time()
