@@ -68,9 +68,7 @@ export default function Profile({ auth }) {
         const res = await fetch(`http://127.0.0.1:5000/profile/${userId}/library`, {
           headers: { Authorization: `Bearer ${token}` },
         });
-
         const data = await res.json();
-
         if (res.ok) setUser(prev => ({ ...prev, library: data }));
       } catch (err) {
         console.error(err);
@@ -78,6 +76,23 @@ export default function Profile({ auth }) {
     }
 
     if (userId && token) fetchLibrary();
+  }, [userId, token]);
+
+  // Fetch user ratings
+  useEffect(() => {
+    async function fetchRatings() {
+      try {
+        const res = await fetch(`http://127.0.0.1:5000/profile/${userId}/ratings`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const data = await res.json();
+        if (res.ok) setUser(prev => ({ ...prev, ratings: data }));
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    if (userId && token) fetchRatings();
   }, [userId, token]);
 
   function handleChange(e) {
@@ -199,8 +214,8 @@ export default function Profile({ auth }) {
       </div>
 
       {/* Library Section */}
-      <div className="w-full max-w-md bg-zinc-900 border border-zinc-800 rounded-xl p-6 shadow-md">
-        <h2 className="text-xl font-semibold text-amber-400 text-center mb-4">My Watchlist</h2>
+      <div className="w-full max-w-md bg-zinc-900 border border-zinc-800 rounded-xl p-6 shadow-md mb-6">
+        <h2 className="text-xl font-semibold text-amber-400 text-center mb-4">My Library</h2>
         <div className="flex flex-col gap-3">
           {user.library && user.library.length > 0 ? (
             user.library.map((item, index) => (
@@ -212,6 +227,24 @@ export default function Profile({ auth }) {
             ))
           ) : (
             <p className="text-center text-zinc-400 mt-2">Your watchlist is empty</p>
+          )}
+        </div>
+      </div>
+
+      {/* Ratings Section */}
+      <div className="w-full max-w-md bg-zinc-900 border border-zinc-800 rounded-xl p-6 shadow-md">
+        <h2 className="text-xl font-semibold text-amber-400 text-center mb-4">My Ratings</h2>
+        <div className="flex flex-col gap-3">
+          {user.ratings && user.ratings.length > 0 ? (
+            user.ratings.map((rating, index) => (
+              <div key={index} className="bg-zinc-800 p-3 rounded-lg border border-zinc-700">
+                <p className="text-lg font-semibold text-white">{rating.title}</p>
+                <p className="text-sm text-zinc-400">Score: {rating.score}/10</p>
+                <p className="text-sm text-zinc-500">{rating.comment}</p>
+              </div>
+            ))
+          ) : (
+            <p className="text-center text-zinc-400 mt-2">You have not rated anything yet</p>
           )}
         </div>
       </div>

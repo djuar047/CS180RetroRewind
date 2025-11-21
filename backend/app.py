@@ -193,11 +193,17 @@ def add_to_library(user_id):
 
 @app.route("/profile/<user_id>/library", methods=["GET"])
 def get_library(user_id):
-    user = user.find_one({"userId": user_id}, {"_id": 0, "library": 1})
-    if not user:
+    user_doc = db["users"].find_one({"_id": ObjectId(user_id)}, {"_id": 0, "profile.library": 1})
+    if not user_doc:
         return jsonify({"error": "User not found"}), 404
+    return jsonify(user_doc.get("profile", {}).get("library", []))
 
-    return jsonify(user.get("library", []))
+
+@app.get("/profile/<user_id>/ratings")
+def get_user_ratings(user_id):
+    # Optionally, verify token here if you want auth
+    ratings = list(db["ratings"].find({"user_id": user_id}, {"_id": 0}))
+    return jsonify(ratings), 200
 
 
 def get_access_token() -> str:

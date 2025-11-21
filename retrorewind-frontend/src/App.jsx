@@ -215,16 +215,15 @@ async function addToLibrary(item) {
 
     const data = await res.json();
     if (!res.ok) {
-      throw new Error(data.error || "Failed to add to watchlist");
+      throw new Error(data.error || "Failed to add to library");
     }
 
-    alert(`${item.title} added to your watchlist!`);
+    alert(`${item.title} added to your library!`);
   } catch (e) {
-    console.error("Add-to-watchlist error:", e);
-    alert("Failed to add to watchlist.");
+    console.error("Add-to-library error:", e);
+    alert("Failed to add to library.");
   }
 }
-
 
   // Ratings 
   async function submitRating() {
