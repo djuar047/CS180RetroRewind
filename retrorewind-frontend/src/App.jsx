@@ -4,21 +4,18 @@ import { Routes, Route, Link } from "react-router-dom";
 import bear from "./assets/bear.webp";
 import Login from "./Login.jsx";
 import Profile from "./Profile.jsx";
-<<<<<<< HEAD
+import CreateAccount from "./CreateAccount.jsx";
 import CommunityThreads from "./pages/CommunityThreads.jsx";
 import ThreadDetail from "./pages/ThreadDetail.jsx";
 
-
-=======
-import CreateAccount from "./CreateAccount.jsx";
->>>>>>> 133dd61 (create account button/functionality)
-
-
 /**
  * App: tiny router shell that swaps pages.
- * - "/"       -> Home (our existing screen)
- * - "/login"  -> Login
- * - "/profile"-> Profile
+ * - "/"         -> Home (our existing screen)
+ * - "/login"    -> Login
+ * - "/profile"  -> Profile
+ * - "/threads"  -> Community threads list
+ * - "/threads/:title" -> Single thread detail
+ * - "/createAccount" -> Create account
  */
 export default function App({ auth, setAuth }) {
   return (
@@ -27,6 +24,8 @@ export default function App({ auth, setAuth }) {
       <Route path="/login" element={<Login auth={auth} setAuth={setAuth} />} />
       <Route path="/profile" element={<Profile auth={auth} />} />
       <Route path="/createAccount" element={<CreateAccount setAuth={setAuth} />} />
+      <Route path="/threads" element={<CommunityThreads />} />
+      <Route path="/threads/:title" element={<ThreadDetail />} />
     </Routes>
   );
 }
@@ -113,10 +112,6 @@ function Home({ auth, setAuth }) {
   ];
 
   // When the user submits the search:
-  // - prevent page reload
-  // - if box is empty, clear results
-  // - otherwise, call our Flask API (/search?q=...)
-  // - if backend fails, show a small warning + filter MOCK results as a fallback
   async function onSearch(e) {
     e.preventDefault();
     const query = q.trim();
@@ -148,10 +143,10 @@ function Home({ auth, setAuth }) {
         )
       );
     } finally {
-      // turn off the “Searching…” state either way
       setLoading(false);
     }
   }
+
   // --- NEW: apply filters again without re-searching ---
   function reapplyFilters() {
     setItems((prev) => applyFilters(prev));
@@ -173,7 +168,7 @@ function Home({ auth, setAuth }) {
         }),
       });
       if (!res.ok) throw new Error(await res.text());
-      const data = await res.json();
+      await res.json();
       alert("Thanks for rating!");
       setRatings((prev) => ({
         ...prev,
@@ -206,44 +201,32 @@ function Home({ auth, setAuth }) {
                 RetroRewind
               </span>
             </div>
-
-
-            
           </div>
 
-          
-
-
-
-          {/* Right side: keep team tag + add nav buttons */}
+          {/* Right side: team tag + nav buttons */}
           <div className="flex items-center gap-3">
             <span className="text-xs font-medium text-zinc-400">
               Team <span className="text-amber-400">Bear 180</span>
             </span>
-<<<<<<< HEAD
 
-            <div className="flex-1 flex justify-center">
-              <Link
-                to="/threads"
-                className="text-sm rounded-lg border border-zinc-700 bg-zinc-900/70 px-3 py-1.5 
-                          text-zinc-200 hover:bg-zinc-800 hover:border-amber-400/70 transition"
-              >
-                 Community Threads
-              </Link>
-            </div>
+            {/* Community Threads */}
+            <Link
+              to="/threads"
+              className="text-sm rounded-lg border border-zinc-700 bg-zinc-900/70 px-3 py-1.5 
+                         text-zinc-200 hover:bg-zinc-800 hover:border-amber-400/70 transition"
+            >
+              Community Threads
+            </Link>
 
-
-
-=======
-            {/* NEW: go to create account */}
+            {/* Create Account */}
             <Link
               to="/createAccount"
               className="rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm font-medium hover:bg-zinc-700 transition"
             >
               Create Account
             </Link>
->>>>>>> 133dd61 (create account button/functionality)
-            {/* NEW: go to login */}
+
+            {/* Login */}
             <Link
               to="/login"
               className="rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm font-medium hover:bg-zinc-700 transition"
@@ -251,7 +234,7 @@ function Home({ auth, setAuth }) {
               Login
             </Link>
 
-            {/* NEW: go to profile */}
+            {/* Profile */}
             <Link
               to="/profile"
               className="rounded-lg border border-blue-600 bg-blue-600/10 px-3 py-2 text-sm font-medium text-blue-300 hover:bg-blue-600/20 transition"
@@ -348,7 +331,6 @@ function Home({ auth, setAuth }) {
               Apply Filters
             </button>
           </div>
-          {/* ------------------------------------------------ */}
 
           {/* small warning if backend is down (we still show mock results) */}
           {err && (
@@ -388,71 +370,29 @@ function Home({ auth, setAuth }) {
                 <p className="mt-3 text-sm leading-relaxed text-zinc-200">
                   {m.summary}
                 </p>
-                {/* fake actions for now (hook these up later) */}
-                <div className="mt-4 flex gap-2">
+                {/* actions */}
+                <div className="mt-4 flex flex-col gap-2">
                   <button className="rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-1.5 text-sm hover:bg-zinc-700">
                     Add to Library
                   </button>
-{ratings[m.id] && (
-  <div className="mt-3 text-sm text-amber-400">
-    Rated {ratings[m.id].stars} / 5 — "{ratings[m.id].review}"
-  </div>
-)}
 
-<div className="mt-4 flex gap-2">
-  <button
-    className="rounded-lg border border-blue-600 bg-blue-600/10 px-3 py-1.5 text-sm text-blue-300"
-    onClick={() => {
-      setCurrentGame(m);
-      setShowModal(true);
-    }}
-  >
-    Rate ★
-  </button>
-</div>
-{showModal && (
-  <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
-    <div className="bg-zinc-900 p-6 rounded-xl border border-zinc-700 max-w-sm w-full">
-      <h3 className="text-xl font-semibold mb-3">
-        Rate {currentGame?.title}
-      </h3>
-      <div className="flex gap-1 mb-3">
-        {[1, 2, 3, 4, 5].map((s) => (
-          <button
-            key={s}
-            onClick={() => setStars(s)}
-            className={`text-2xl ${
-              s <= stars ? "text-amber-400" : "text-zinc-600"
-            }`}
-          >
-            ★
-          </button>
-        ))}
-      </div>
-      <textarea
-        value={review}
-        onChange={(e) => setReview(e.target.value)}
-        placeholder="Write a short review (optional)"
-        className="w-full rounded-lg bg-zinc-800 border border-zinc-700 px-3 py-2 text-sm mb-4"
-      />
-      <div className="flex justify-end gap-2">
-        <button
-          onClick={() => setShowModal(false)}
-          className="px-3 py-2 text-sm rounded-lg bg-zinc-700 hover:bg-zinc-600"
-        >
-          Cancel
-        </button>
-        <button
-          onClick={submitRating}
-          className="px-3 py-2 text-sm rounded-lg bg-blue-600 hover:bg-blue-500"
-        >
-          Submit
-        </button>
-      </div>
-    </div>
-  </div>
-)}
+                  {ratings[m.id] && (
+                    <div className="mt-1 text-sm text-amber-400">
+                      Rated {ratings[m.id].stars} / 5 — "{ratings[m.id].review}"
+                    </div>
+                  )}
 
+                  <div className="mt-1 flex gap-2">
+                    <button
+                      className="rounded-lg border border-blue-600 bg-blue-600/10 px-3 py-1.5 text-sm text-blue-300"
+                      onClick={() => {
+                        setCurrentGame(m);
+                        setShowModal(true);
+                      }}
+                    >
+                      Rate ★
+                    </button>
+                  </div>
                 </div>
               </div>
             </article>
@@ -466,6 +406,50 @@ function Home({ auth, setAuth }) {
           )}
         </section>
       </main>
+
+      {/* Rating modal */}
+      {showModal && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
+          <div className="bg-zinc-900 p-6 rounded-xl border border-zinc-700 max-w-sm w-full">
+            <h3 className="text-xl font-semibold mb-3">
+              Rate {currentGame?.title}
+            </h3>
+            <div className="flex gap-1 mb-3">
+              {[1, 2, 3, 4, 5].map((s) => (
+                <button
+                  key={s}
+                  onClick={() => setStars(s)}
+                  className={`text-2xl ${
+                    s <= stars ? "text-amber-400" : "text-zinc-600"
+                  }`}
+                >
+                  ★
+                </button>
+              ))}
+            </div>
+            <textarea
+              value={review}
+              onChange={(e) => setReview(e.target.value)}
+              placeholder="Write a short review (optional)"
+              className="w-full rounded-lg bg-zinc-800 border border-zinc-700 px-3 py-2 text-sm mb-4"
+            />
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={() => setShowModal(false)}
+                className="px-3 py-2 text-sm rounded-lg bg-zinc-700 hover:bg-zinc-600"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={submitRating}
+                className="px-3 py-2 text-sm rounded-lg bg-blue-600 hover:bg-blue-500"
+              >
+                Submit
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* simple footer with year + team name */}
       <footer className="mt-10 border-t border-zinc-800 py-6 text-center text-sm text-zinc-500">

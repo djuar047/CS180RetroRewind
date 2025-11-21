@@ -1,10 +1,10 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom"; // import navigate hook
+import { useNavigate } from "react-router-dom";
 
 export default function Profile({ auth }) {
   const userId = auth?.userId;
   const token = auth?.token;
-  const navigate = useNavigate(); // add this
+  const navigate = useNavigate();
 
   // Guard if user is not logged in
   if (!userId || !token) {
@@ -18,7 +18,6 @@ export default function Profile({ auth }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-
   const [editMode, setEditMode] = useState(false);
   const [formData, setFormData] = useState({
     username: "",
@@ -27,7 +26,7 @@ export default function Profile({ auth }) {
     avatar_url: "",
   });
 
-  // Fetch user data
+  // Fetch user profile
   useEffect(() => {
     async function fetchProfile() {
       try {
@@ -37,7 +36,9 @@ export default function Profile({ auth }) {
             Authorization: `Bearer ${token}`,
           },
         });
+
         const data = await res.json();
+
         if (res.ok) {
           setUser(data);
           setFormData({
@@ -60,9 +61,28 @@ export default function Profile({ auth }) {
     fetchProfile();
   }, [userId, token]);
 
+  // Fetch user library
+  useEffect(() => {
+    async function fetchLibrary() {
+      try {
+        const res = await fetch(`http://127.0.0.1:5000/profile/${userId}/library`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+
+        const data = await res.json();
+
+        if (res.ok) setUser(prev => ({ ...prev, library: data }));
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    if (userId && token) fetchLibrary();
+  }, [userId, token]);
+
   function handleChange(e) {
     const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
+    setFormData(prev => ({ ...prev, [name]: value }));
   }
 
   async function handleUpdate(e) {
@@ -76,9 +96,11 @@ export default function Profile({ auth }) {
         },
         body: JSON.stringify(formData),
       });
+
       const data = await res.json();
+
       if (res.ok) {
-        setUser(formData);
+        setUser(prev => ({ ...prev, ...formData }));
         setEditMode(false);
         alert("Profile updated successfully!");
       } else {
@@ -95,9 +117,17 @@ export default function Profile({ auth }) {
   if (!user) return null;
 
   return (
-    <div className="min-h-screen bg-zinc-950 text-zinc-100 flex items-center justify-center">
-      <div className="w-full max-w-md bg-zinc-900 border border-zinc-800 rounded-xl p-6 shadow-md">
-        <div className="flex flex-col items-center">
+    <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col items-center py-10">
+      {/* Profile Card */}
+      <div className="w-full max-w-md bg-zinc-900 border border-zinc-800 rounded-xl p-6 shadow-md relative mb-6">
+        <button
+          onClick={() => navigate("/")}
+          className="absolute top-4 right-4 bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-lg"
+        >
+          Home
+        </button>
+
+        <div className="flex flex-col items-center mt-6">
           <img
             src={formData.avatar_url || "https://placehold.co/120x120?text=User"}
             alt="User avatar"
@@ -109,6 +139,12 @@ export default function Profile({ auth }) {
               <h1 className="text-2xl font-bold text-amber-400">{user.username}</h1>
               <p className="text-sm text-zinc-400">{user.email}</p>
               <p className="mt-2 text-sm text-zinc-300">{user.bio}</p>
+              <button
+                onClick={() => setEditMode(true)}
+                className="mt-6 rounded-lg border border-zinc-700 bg-zinc-800 px-4 py-2 text-sm hover:bg-zinc-700"
+              >
+                Edit Profile
+              </button>
             </>
           ) : (
             <form onSubmit={handleUpdate} className="w-full flex flex-col gap-3 mt-2">
@@ -160,24 +196,24 @@ export default function Profile({ auth }) {
             </form>
           )}
         </div>
+      </div>
 
-        {!editMode && (
-          <div className="mt-6 flex justify-center">
-            <button
-              onClick={() => setEditMode(true)}
-              className="rounded-lg border border-zinc-700 bg-zinc-800 px-4 py-2 text-sm hover:bg-zinc-700"
-            >
-              Edit Profile
-            </button>
-            {/* Return to Home Button */}
-          <button
-    onClick={() => navigate("/")}
-    className="absolute top-4 right-4 bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-lg shadow-lg"
-  >
-    Home
-  </button>
-          </div>
-        )}
+      {/* Library Section */}
+      <div className="w-full max-w-md bg-zinc-900 border border-zinc-800 rounded-xl p-6 shadow-md">
+        <h2 className="text-xl font-semibold text-amber-400 text-center mb-4">My Watchlist</h2>
+        <div className="flex flex-col gap-3">
+          {user.library && user.library.length > 0 ? (
+            user.library.map((item, index) => (
+              <div key={index} className="bg-zinc-800 p-3 rounded-lg border border-zinc-700">
+                <p className="text-lg font-semibold text-white">{item.title}</p>
+                <p className="text-sm text-zinc-400">{item.type}</p>
+                <p className="text-sm text-zinc-500">{item.year}</p>
+              </div>
+            ))
+          ) : (
+            <p className="text-center text-zinc-400 mt-2">Your watchlist is empty</p>
+          )}
+        </div>
       </div>
     </div>
   );
