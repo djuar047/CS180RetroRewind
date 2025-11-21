@@ -7,19 +7,20 @@ import Login from "./Login.jsx";
 import Profile from "./Profile.jsx";
 import CreateAccount from "./CreateAccount.jsx";
 
+
 /**
  * App: tiny router shell that swaps pages.
  * - "/"       -> Home (our existing screen)
  * - "/login"  -> Login
  * - "/profile"-> Profile
  */
-export default function App() {
+export default function App({ auth, setAuth }) {
   return (
     <Routes>
-      <Route path="/" element={<Home />} />
-      <Route path="/login" element={<Login />} />
-      <Route path="/profile" element={<Profile />} />
-      <Route path="/createAccount" element={<CreateAccount />} />
+      <Route path="/" element={<Home auth={auth} setAuth={setAuth} />} />
+      <Route path="/login" element={<Login auth={auth} setAuth={setAuth} />} />
+      <Route path="/profile" element={<Profile auth={auth} />} />
+      <Route path="/createAccount" element={<CreateAccount setAuth={setAuth} />} />
     </Routes>
   );
 }
@@ -27,7 +28,7 @@ export default function App() {
 /**
  * Home: this is your original App UI.
  */
-function Home() {
+function Home({ auth, setAuth }) {
   // q = what the user typed in the search box
   const [q, setQ] = useState("");
   // items = list of results we show in the UI (from backend or mock)
