@@ -156,18 +156,49 @@ def update_profile(user_id):
 @app.post("/profile/<user_id>/library/add")
 def add_to_library(user_id):
     data = request.json
+
+    # Validate input
+    if not all([data.get("id"), data.get("title"), data.get("type")]):
+        return jsonify({"error": "missing_fields"}), 400
+
     media = {
         "id": data.get("id"),
         "title": data.get("title"),
         "type": data.get("type"),
-        "year": data.get("year"),
-        "coverUrl": data.get("coverUrl")
+        "year": data.get("year", ""),
+        "coverUrl": data.get("coverUrl", "")
     }
+
+    # Make sure profile exists and library exists
     db["users"].update_one(
         {"_id": ObjectId(user_id)},
-        {"$push": {"profile.library": media}}
+        {
+            "$setOnInsert": {"profile": {"bio": "", "avatar_url": "", "wishlist": [], "library": []}},
+        },
+        upsert=True
     )
-    return jsonify({"message": "Added to library"})
+
+    # Push to library
+    result = db["users"].update_one(
+        {"_id": ObjectId(user_id)},
+        {
+            "$push": {"profile.library": media}
+        }
+    )
+
+    if result.modified_count == 0:
+        return jsonify({"error": "user_not_found"}), 404
+
+    return jsonify({"message": "Added to watchlist", "item": media})
+
+@app.route("/profile/<user_id>/library", methods=["GET"])
+def get_library(user_id):
+    user = user.find_one({"userId": user_id}, {"_id": 0, "library": 1})
+    if not user:
+        return jsonify({"error": "User not found"}), 404
+
+    return jsonify(user.get("library", []))
+
 
 def get_access_token() -> str:
     now = time.time()

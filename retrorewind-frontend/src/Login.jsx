@@ -47,7 +47,7 @@ export default function Login({ auth, setAuth }) {
     alert(data.message);
 
     // go to profile screen after login
-    navigate("/profile");
+    navigate("/");
   } catch (err) {
     console.error(err);
     setMessage(err.message || "Login failed");
