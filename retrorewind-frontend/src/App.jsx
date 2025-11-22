@@ -5,6 +5,8 @@ import { Routes, Route, Link } from "react-router-dom";
 // NEW: simple pages
 import Login from "./Login.jsx";
 import Profile from "./Profile.jsx";
+import CreateAccount from "./CreateAccount.jsx";
+
 
 /**
  * App: tiny router shell that swaps pages.
@@ -12,12 +14,13 @@ import Profile from "./Profile.jsx";
  * - "/login"  -> Login
  * - "/profile"-> Profile
  */
-export default function App() {
+export default function App({ auth, setAuth }) {
   return (
     <Routes>
-      <Route path="/" element={<Home />} />
-      <Route path="/login" element={<Login />} />
-      <Route path="/profile" element={<Profile />} />
+      <Route path="/" element={<Home auth={auth} setAuth={setAuth} />} />
+      <Route path="/login" element={<Login auth={auth} setAuth={setAuth} />} />
+      <Route path="/profile" element={<Profile auth={auth} />} />
+      <Route path="/createAccount" element={<CreateAccount setAuth={setAuth} />} />
     </Routes>
   );
 }
@@ -25,7 +28,7 @@ export default function App() {
 /**
  * Home: this is your original App UI.
  */
-function Home() {
+function Home({ auth, setAuth }) {
   // q = what the user typed in the search box
   const [q, setQ] = useState("");
   // items = list of results we show in the UI (from backend or mock)
@@ -103,34 +106,70 @@ function Home() {
     },
   ];
 
+  function resetFilters() {
+    setTypeFilter("All");
+    setYearFrom("");
+    setYearTo("");
+    setPlatformFilter("");
+    // optionally reapply filters to update displayed items
+    setItems((prev) => applyFilters(prev));
+  }
   // When the user submits the search:
   // - prevent page reload
   // - if box is empty, clear results
   // - otherwise, call our Flask API (/search?q=...)
   // - if backend fails, show a small warning + filter MOCK results as a fallback
-  async function onSearch(e) {
-    e.preventDefault();
-    const query = q.trim();
-    if (!query) {
-      setItems([]);
-      setErr("");
-      return;
-    }
+async function onSearch(e) {
+  e.preventDefault();
+  const query = q.trim();
 
-    setLoading(true);
-    setErr("");
-    try {
-      // call our local backend (Flask) which calls IGDB and OMDb
+  setLoading(true);
+  setErr("");
+
+  try {
+    let results = [];
+
+    if (!query) {
+      // No search query → show top 20 highest-rated items
       const [gamesRes, moviesRes] = await Promise.all([
-        fetch(`http://127.0.0.1:5000/search?q=${encodeURIComponent(query)}`),
-        fetch(`http://127.0.0.1:5000/movies?q=${encodeURIComponent(query)}`)
+        fetch(`http://127.0.0.1:5000/search?q=`), // could fetch all or use a special endpoint
+        fetch(`http://127.0.0.1:5000/movies?q=`),
       ]);
       const games = (await gamesRes.json()) || [];
       const movies = (await moviesRes.json()) || [];
-      setItems(applyFilters([...games, ...movies]));  // merge + filter
-    } catch (e) {
-      // backend not running or failed → tell user + fall back to MOCK
-      setErr("Backend not reachable — showing sample results.");
+      results = [...games, ...movies];
+
+      // Sort by rating from your ratings state (descending)
+      results.sort((a, b) => {
+        const ra = ratings[a.id]?.stars || 0;
+        const rb = ratings[b.id]?.stars || 0;
+        return rb - ra;
+      });
+
+      // Take top 20
+      results = results.slice(0, 20);
+
+      setItems(results);
+      return;
+    }
+
+    // If query exists → normal search
+    const [gamesRes, moviesRes] = await Promise.all([
+      fetch(`http://127.0.0.1:5000/search?q=${encodeURIComponent(query)}`),
+      fetch(`http://127.0.0.1:5000/movies?q=${encodeURIComponent(query)}`),
+    ]);
+    const games = (await gamesRes.json()) || [];
+    const movies = (await moviesRes.json()) || [];
+    setItems(applyFilters([...games, ...movies])); // merge + filter
+  } catch (e) {
+    // fallback to mock data
+    setErr("Backend not reachable — showing sample results.");
+
+    if (!query) {
+      setItems(
+        MOCK_RESULTS.sort((a, b) => (ratings[b.id]?.stars || 0) - (ratings[a.id]?.stars || 0)).slice(0, 20)
+      );
+    } else {
       setItems(
         applyFilters(
           MOCK_RESULTS.filter((m) =>
@@ -138,16 +177,53 @@ function Home() {
           )
         )
       );
-    } finally {
-      // turn off the “Searching…” state either way
-      setLoading(false);
     }
+  } finally {
+    setLoading(false);
   }
+}
+
   // --- NEW: apply filters again without re-searching ---
   function reapplyFilters() {
     setItems((prev) => applyFilters(prev));
   }
   // -----------------------------------------------------
+async function addToLibrary(item) {
+  if (!auth?.userId || !auth?.token) {
+    alert("Log in first!");
+    return;
+  }
+
+  try {
+    const res = await fetch(
+      `http://127.0.0.1:5000/profile/${auth.userId}/library/add`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${auth.token}`,
+        },
+        body: JSON.stringify({
+          id: item.id,
+          title: item.title,
+          type: item.type,
+          year: item.year || "",
+          coverUrl: item.coverUrl || "",
+        }),
+      }
+    );
+
+    const data = await res.json();
+    if (!res.ok) {
+      throw new Error(data.error || "Failed to add to library");
+    }
+
+    alert(`${item.title} added to your library!`);
+  } catch (e) {
+    console.error("Add-to-library error:", e);
+    alert("Failed to add to library.");
+  }
+}
 
   // Ratings 
   async function submitRating() {
@@ -182,56 +258,82 @@ function Home() {
     <div className="min-h-screen bg-zinc-950 text-zinc-100">
       {/* Top bar with logo + app name */}
       <header className="border-b border-zinc-800 bg-gradient-to-r from-blue-600/15 via-zinc-950 to-amber-400/15">
-        <div className="mx-auto max-w-6xl px-4 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            {/* Little bear icon with glow for team branding */}
-            <div className="group relative h-9 w-9 rounded-xl overflow-hidden ring-2 ring-amber-400/70 bg-zinc-900 shadow-md shadow-blue-600/20 transition">
-              <img src={bear} alt="Bear 180" className="h-full w-full object-cover" />
-              <span className="pointer-events-none absolute inset-0 rounded-xl ring-2 ring-transparent group-hover:ring-blue-600/70 group-hover:shadow-[0_0_18px_4px_rgba(251,191,36,0.35)] transition" />
-            </div>
+  <div className="mx-auto max-w-6xl px-4 py-4 flex items-center justify-between">
+    <div className="flex items-center gap-3">
+      {/* Little bear icon */}
+      <div className="group relative h-9 w-9 rounded-xl overflow-hidden ring-2 ring-amber-400/70 bg-zinc-900 shadow-md shadow-blue-600/20 transition">
+        <img src={bear} alt="Bear 180" className="h-full w-full object-cover" />
+        <span className="pointer-events-none absolute inset-0 rounded-xl ring-2 ring-transparent group-hover:ring-blue-600/70 group-hover:shadow-[0_0_18px_4px_rgba(251,191,36,0.35)] transition" />
+      </div>
 
-            {/* Title uses blue→gold gradient for UCR colors */}
-            <div className="text-2xl font-extrabold tracking-tight">
-              <span className="bg-gradient-to-r from-blue-600 to-amber-400 bg-clip-text text-transparent drop-shadow-[0_0_10px_rgba(37,99,235,0.25)]">
-                RetroRewind
-              </span>
-            </div>
-          </div>
+      {/* Title as a link to home */}
+      <button
+  onClick={() => {
+    resetFilters(); // reset all filters
+    setQ("");       // clear search input
+    setItems([]);   // clear displayed results
+  }}
+  className="text-2xl font-extrabold tracking-tight cursor-pointer bg-gradient-to-r from-blue-600 to-amber-400 bg-clip-text text-transparent drop-shadow-[0_0_10px_rgba(37,99,235,0.25)]"
+>
+  RetroRewind
+</button>
 
+      </div>
           {/* Right side: keep team tag + add nav buttons */}
-          <div className="hidden sm:flex items-center gap-3">
+          <div className="flex items-center gap-3">
             <span className="text-xs font-medium text-zinc-400">
               Team <span className="text-amber-400">Bear 180</span>
             </span>
+            {/* NEW: go to create account */}
+              {!auth.userId && (
+    <>
+      {/* Create Account */}
+      <Link
+        to="/createAccount"
+        className="rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm font-medium hover:bg-zinc-700 transition"
+      >
+        Create Account
+      </Link>
 
-            {/* NEW: go to login */}
-            <Link
-              to="/login"
-              className="rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-1.5 text-sm hover:bg-zinc-700"
-            >
-              Login
-            </Link>
+      {/* Login */}
+      <Link
+        to="/login"
+        className="rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm font-medium hover:bg-zinc-700 transition"
+      >
+        Login
+      </Link>
+    </>
+  )}
 
             {/* NEW: go to profile */}
             <Link
               to="/profile"
-              className="rounded-lg border border-blue-600 bg-blue-600/10 px-3 py-1.5 text-sm text-blue-300 hover:bg-blue-600/20"
+              className="rounded-lg border border-blue-600 bg-blue-600/10 px-3 py-2 text-sm font-medium text-blue-300 hover:bg-blue-600/20 transition"
             >
               Profile
             </Link>
+            {auth.userId && (
+    <button
+      onClick={() => setAuth({ userId: null, token: null })}
+      className="bg-red-600 hover:bg-red-500 px-4 py-2 rounded-lg text-white"
+    >
+      Log Out
+    </button>
+  )}
           </div>
         </div>
+        
       </header>
 
       <main className="mx-auto max-w-6xl px-4 py-8">
         {/* Section with the title + search box */}
         <section className="mb-8">
           <h2 className="text-3xl font-bold text-zinc-100">
-            Track, rate, and relive the classics
+            Track, Rate, and Relive the Classics
           </h2>
-          <p className="mt-1 text-zinc-400">Blue & gold theme • games now, movies soon</p>
+          <p className="mt-1 text-zinc-400">-Games and Movies-</p>
 
-          {/* Search form: on submit calls onSearch() */}
+          {/* form: on submit calls onSearch() */}
           <form onSubmit={onSearch} className="mt-5 flex gap-2">
             {/* user types here */}
             <input
@@ -308,6 +410,14 @@ function Home() {
             >
               Apply Filters
             </button>
+            <button
+  type="button"
+  onClick={resetFilters}
+  className="rounded-xl border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm hover:bg-zinc-700"
+  title="Reset all filters"
+>
+  Reset Filters
+</button>
           </div>
           {/* ------------------------------------------------ */}
 
@@ -351,9 +461,13 @@ function Home() {
                 </p>
                 {/* fake actions for now (hook these up later) */}
                 <div className="mt-4 flex gap-2">
-                  <button className="rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-1.5 text-sm hover:bg-zinc-700">
-                    Add to Library
-                  </button>
+                  <button
+  className="rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-1.5 text-sm hover:bg-zinc-700"
+  onClick={() => addToLibrary(m)}
+>
+  Add to Watchlist
+</button>
+
 {ratings[m.id] && (
   <div className="mt-3 text-sm text-amber-400">
     Rated {ratings[m.id].stars} / 5 — "{ratings[m.id].review}"
@@ -436,11 +550,3 @@ function Home() {
     </div>
   );
 }
-
-
-
-
-
-
-
-

@@ -1,22 +1,58 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 
-export default function Login() {
-  // Store user input
+export default function Login({ auth, setAuth }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-
-  // Temporary message for testing
   const [message, setMessage] = useState("");
+  const navigate = useNavigate();
+
+  // If user is already logged in, show log out option
+  if (auth?.userId) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-zinc-950 text-zinc-100">
+        <p className="text-center text-amber-300 mb-4">
+          You are already logged in. Please log out first to log in as another user.
+        </p>
+        <button
+          onClick={() => setAuth({ userId: null, token: null })}
+          className="bg-red-600 hover:bg-red-500 px-4 py-2 rounded-lg text-white"
+        >
+          Log Out
+        </button>
+      </div>
+    );
+  }
 
   // Simple login button just to test the UI for now
-  function handleLogin(e) {
-    e.preventDefault();
-    if (!email || !password) {
-      setMessage("Please enter both email and password.");
-      return;
-    }
-    setMessage(`Logged in as ${email}`);
+  async function handleLogin(e) {
+  e.preventDefault();
+  try {
+    const res = await fetch("http://127.0.0.1:5000/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password }),
+    });
+
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "Login failed");
+
+    // store userId and token globally
+    setAuth({
+      userId: data.user_id,
+      token: data.auth_token,
+    });
+
+
+    alert(data.message);
+
+    // go to profile screen after login
+    navigate("/");
+  } catch (err) {
+    console.error(err);
+    setMessage(err.message || "Login failed");
   }
+}
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-zinc-950 text-zinc-100">
