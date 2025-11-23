@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useEffect } from "react";
 import bear from "./assets/bear.webp";
 // NEW: allow in-app links + route definitions
 import { Routes, Route, Link } from "react-router-dom";
@@ -14,6 +15,7 @@ import CreateAccount from "./CreateAccount.jsx";
  * - "/login"  -> Login
  * - "/profile"-> Profile
  */
+
 export default function App({ auth, setAuth }) {
   return (
     <Routes>
@@ -52,6 +54,26 @@ function Home({ auth, setAuth }) {
   const [yearTo, setYearTo] = useState("");              // the latest year to show
   const [platformFilter, setPlatformFilter] = useState(""); // find results that match this platform (ex: “Xbox”)
   // ---------------------------
+
+//   useEffect(() => {
+//   async function loadTopItems() {
+//     try {
+//       const [gamesRes, moviesRes] = await Promise.all([
+//         fetch("http://127.0.0.1:5000/games/random"),
+//         fetch("http://127.0.0.1:5000/movies/random")
+//       ]);
+
+//       const games = await gamesRes.json();
+//       const movies = await moviesRes.json();
+
+//       setItems([...games, ...movies]);
+//     } catch (e) {
+//       console.error("Failed to load top items", e);
+//     }
+//   }
+
+//   loadTopItems();
+// }, []);
 
   // --- NEW: filter helper (used to narrow down the search results) ---
   function applyFilters(list) {
@@ -119,7 +141,7 @@ function Home({ auth, setAuth }) {
   // - if box is empty, clear results
   // - otherwise, call our Flask API (/search?q=...)
   // - if backend fails, show a small warning + filter MOCK results as a fallback
-async function onSearch(e) {
+  async function onSearch(e) {
   e.preventDefault();
   const query = q.trim();
 
@@ -227,32 +249,66 @@ async function addToLibrary(item) {
 
   // Ratings 
   async function submitRating() {
-    if (!stars) return alert("Please select a star rating first.");
-    try {
-      const res = await fetch("http://127.0.0.1:5000/ratings", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          user_id: "1",
-          media_id: currentGame.id,
-          stars,
-          review_text: review,
-        }),
-      });
-      if (!res.ok) throw new Error(await res.text());
-      const data = await res.json();
-      alert("Thanks for rating!");
-      setRatings((prev) => ({
-        ...prev,
-        [currentGame.id]: { stars, review },
-      }));
-      setShowModal(false);
-      setStars(0);
-      setReview("");
-    } catch (e) {
-      alert("Failed to submit rating.");
-    }
+  if (!stars) return alert("Please select a star rating first.");
+
+  try {
+    const res = await fetch("http://127.0.0.1:5000/ratings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        user_id: auth.userId,
+        media_id: currentGame.id,
+        stars,
+        review_text: review,
+      }),
+    });
+
+    if (!res.ok) throw new Error(await res.text());
+
+    alert("Rating saved");
+
+    setRatings(prev => ({
+      ...prev,
+      [currentGame.id]: { stars, review }
+    }));
+
+    setShowModal(false);
+    setStars(0);
+    setReview("");
+  } catch (e) {
+    alert("Failed to submit rating");
   }
+}
+
+async function removeRating() {
+  try {
+    const res = await fetch("http://127.0.0.1:5000/ratings", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        user_id: auth.userId,
+        media_id: currentGame.id
+      }),
+    });
+
+    if (!res.ok) throw new Error(await res.text());
+
+    alert("Rating removed");
+
+    setRatings(prev => {
+      const copy = { ...prev };
+      delete copy[currentGame.id];
+      return copy;
+    });
+
+    setStars(0);
+    setReview("");
+    setShowModal(false);
+  } catch (e) {
+    alert("Failed to remove rating");
+  }
+}
+
 
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100">
@@ -465,7 +521,7 @@ async function addToLibrary(item) {
   className="rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-1.5 text-sm hover:bg-zinc-700"
   onClick={() => addToLibrary(m)}
 >
-  Add to Watchlist
+  Add to Library
 </button>
 
 {ratings[m.id] && (
@@ -478,9 +534,20 @@ async function addToLibrary(item) {
   <button
     className="rounded-lg border border-blue-600 bg-blue-600/10 px-3 py-1.5 text-sm text-blue-300"
     onClick={() => {
-      setCurrentGame(m);
-      setShowModal(true);
-    }}
+  setCurrentGame(m);
+
+  const existing = ratings[m.id];
+  if (existing) {
+    setStars(existing.stars);
+    setReview(existing.review);
+  } else {
+    setStars(0);
+    setReview("");
+  }
+
+  setShowModal(true);
+}}
+
   >
     Rate ★
   </button>
@@ -510,20 +577,32 @@ async function addToLibrary(item) {
         placeholder="Write a short review (optional)"
         className="w-full rounded-lg bg-zinc-800 border border-zinc-700 px-3 py-2 text-sm mb-4"
       />
-      <div className="flex justify-end gap-2">
-        <button
-          onClick={() => setShowModal(false)}
-          className="px-3 py-2 text-sm rounded-lg bg-zinc-700 hover:bg-zinc-600"
-        >
-          Cancel
-        </button>
-        <button
-          onClick={submitRating}
-          className="px-3 py-2 text-sm rounded-lg bg-blue-600 hover:bg-blue-500"
-        >
-          Submit
-        </button>
-      </div>
+<div className="flex justify-end gap-2">
+
+  {ratings[currentGame?.id] && (
+    <button
+      onClick={removeRating}
+      className="px-3 py-2 text-sm rounded-lg bg-red-600 hover:bg-red-500"
+    >
+      Remove
+    </button>
+  )}
+
+  <button
+    onClick={() => setShowModal(false)}
+    className="px-3 py-2 text-sm rounded-lg bg-zinc-700 hover:bg-zinc-600"
+  >
+    Cancel
+  </button>
+
+  <button
+    onClick={submitRating}
+    className="px-3 py-2 text-sm rounded-lg bg-blue-600 hover:bg-blue-500"
+  >
+    Submit
+  </button>
+</div>
+
     </div>
   </div>
 )}
