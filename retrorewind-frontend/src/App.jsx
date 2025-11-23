@@ -1,32 +1,34 @@
 import { useState } from "react";
+import { Routes, Route, Link } from "react-router-dom";
+
 import bear from "./assets/bear.webp";
+import Login from "./Login.jsx";
+import Profile from "./Profile.jsx";
+import CommunityThreads from "./pages/CommunityThreads.jsx";
+import ThreadDetail from "./pages/ThreadDetail.jsx";
 
-// MOCK data to show something if the backend isn't running.
-// (Only used as a fallback inside the catch block.)
-const MOCK_RESULTS = [
-  {
-    id: "1",
-    title: "Halo: Combat Evolved",
-    year: "2001-11-15",
-    platforms: ["Xbox", "PC (Windows)"],
-    summary:
-      "Fight for humanity against the Covenant on the ancient ring-world Halo.",
-    coverUrl: "https://placehold.co/200x280?text=HALO",
-    type: "Game",
-  },
-  {
-    id: "2",
-    title: "The Matrix",
-    year: "1999-03-31",
-    platforms: ["Theaters", "Blu-ray"],
-    summary:
-      "A hacker discovers reality is a simulated construct in this genre-defining film.",
-    coverUrl: "https://placehold.co/200x280?text=MATRIX",
-    type: "Movie",
-  },
-];
 
+
+/**
+ * App: tiny router shell that swaps pages.
+ * - "/"       -> Home (our existing screen)
+ * - "/login"  -> Login
+ * - "/profile"-> Profile
+ */
 export default function App() {
+  return (
+    <Routes>
+      <Route path="/" element={<Home />} />
+      <Route path="/login" element={<Login />} />
+      <Route path="/profile" element={<Profile />} />
+    </Routes>
+  );
+}
+
+/**
+ * Home: this is your original App UI.
+ */
+function Home() {
   // q = what the user typed in the search box
   const [q, setQ] = useState("");
   // items = list of results we show in the UI (from backend or mock)
@@ -43,6 +45,66 @@ export default function App() {
 
   // for displaying ratings in the UI (local only)
   const [ratings, setRatings] = useState({});
+
+  // --- NEW: simple search filters that user can change ---
+  const [typeFilter, setTypeFilter] = useState("All");   // shows all by default, or pick “Game” or “Movie”
+  const [yearFrom, setYearFrom] = useState("");          // the earliest year to show
+  const [yearTo, setYearTo] = useState("");              // the latest year to show
+  const [platformFilter, setPlatformFilter] = useState(""); // find results that match this platform (ex: “Xbox”)
+  // ---------------------------
+
+  // --- NEW: filter helper (used to narrow down the search results) ---
+  function applyFilters(list) {
+    const yf = parseInt(yearFrom, 10);
+    const yt = parseInt(yearTo, 10);
+
+    return (list || []).filter((it) => {
+      // filter by type (Game / Movie)
+      if (typeFilter !== "All") {
+        if ((it.type || "").toLowerCase() !== typeFilter.toLowerCase()) return false;
+      }
+      // filter by year range if given(read first 4 chars)
+      if ((yearFrom || yearTo) && it.year && it.year !== "—") {
+        const y = parseInt(String(it.year).slice(0, 4), 10);
+        if (Number.isInteger(yf) && y < yf) return false;
+        if (Number.isInteger(yt) && y > yt) return false;
+      }
+      // filter by platform (checks if platform name includes the search text)
+      if (platformFilter.trim()) {
+        const p = platformFilter.trim().toLowerCase();
+        const arr = Array.isArray(it.platforms) ? it.platforms : [];
+        const hit = arr.some((name) => (name || "").toLowerCase().includes(p));
+        if (!hit) return false;
+      }
+      return true;
+    });
+  }
+  // --------------------------------------------------
+
+  // MOCK data to show something if the backend isn't running.
+  // (Only used as a fallback inside the catch block.)
+  const MOCK_RESULTS = [
+    {
+      id: "1",
+      title: "Halo: Combat Evolved",
+      year: "2001-11-15",
+      platforms: ["Xbox", "PC (Windows)"],
+      summary:
+        "Fight for humanity against the Covenant on the ancient ring-world Halo.",
+      coverUrl: "https://placehold.co/200x280?text=HALO",
+      type: "Game",
+    },
+    {
+      id: "2",
+      title: "The Matrix",
+      year: "1999-03-31",
+      platforms: ["Theaters", "Blu-ray"],
+      summary:
+        "A hacker discovers reality is a simulated construct in this genre-defining film.",
+      coverUrl: "https://placehold.co/200x280?text=MATRIX",
+      type: "Movie",
+    },
+  ];
 
   // When the user submits the search:
   // - prevent page reload
@@ -63,18 +125,20 @@ export default function App() {
     try {
       // call our local backend (Flask) which calls IGDB and OMDb
       const [gamesRes, moviesRes] = await Promise.all([
-      fetch(`http://127.0.0.1:5000/search?q=${encodeURIComponent(query)}`),
-      fetch(`http://127.0.0.1:5000/movies?q=${encodeURIComponent(query)}`)
-    ]);
+        fetch(`http://127.0.0.1:5000/search?q=${encodeURIComponent(query)}`),
+        fetch(`http://127.0.0.1:5000/movies?q=${encodeURIComponent(query)}`)
+      ]);
       const games = (await gamesRes.json()) || [];
-    const movies = (await moviesRes.json()) || [];
-    setItems([...games, ...movies]);  // merge results
+      const movies = (await moviesRes.json()) || [];
+      setItems(applyFilters([...games, ...movies]));  // merge + filter
     } catch (e) {
       // backend not running or failed → tell user + fall back to MOCK
       setErr("Backend not reachable — showing sample results.");
       setItems(
-        MOCK_RESULTS.filter((m) =>
-          m.title.toLowerCase().includes(query.toLowerCase())
+        applyFilters(
+          MOCK_RESULTS.filter((m) =>
+            m.title.toLowerCase().includes(query.toLowerCase())
+          )
         )
       );
     } finally {
@@ -82,8 +146,14 @@ export default function App() {
       setLoading(false);
     }
   }
-// Ratings 
-async function submitRating() {
+  // --- NEW: apply filters again without re-searching ---
+  function reapplyFilters() {
+    setItems((prev) => applyFilters(prev));
+  }
+  // -----------------------------------------------------
+
+  // Ratings 
+  async function submitRating() {
     if (!stars) return alert("Please select a star rating first.");
     try {
       const res = await fetch("http://127.0.0.1:5000/ratings", {
@@ -111,12 +181,12 @@ async function submitRating() {
     }
   }
 
-
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100">
       {/* Top bar with logo + app name */}
       <header className="border-b border-zinc-800 bg-gradient-to-r from-blue-600/15 via-zinc-950 to-amber-400/15">
         <div className="mx-auto max-w-6xl px-4 py-4 flex items-center justify-between">
+
           <div className="flex items-center gap-3">
             {/* Little bear icon with glow for team branding */}
             <div className="group relative h-9 w-9 rounded-xl overflow-hidden ring-2 ring-amber-400/70 bg-zinc-900 shadow-md shadow-blue-600/20 transition">
@@ -130,12 +200,49 @@ async function submitRating() {
                 RetroRewind
               </span>
             </div>
+
+
+            
           </div>
 
-          {/* Tiny team tag on the right */}
-          <span className="hidden sm:inline text-xs font-medium text-zinc-400">
-            Team <span className="text-amber-400">Bear 180</span>
-          </span>
+          
+
+
+
+          {/* Right side: keep team tag + add nav buttons */}
+          <div className="hidden sm:flex items-center gap-3">
+            <span className="text-xs font-medium text-zinc-400">
+              Team <span className="text-amber-400">Bear 180</span>
+            </span>
+
+            <div className="flex-1 flex justify-center">
+              <Link
+                to="/threads"
+                className="text-sm rounded-lg border border-zinc-700 bg-zinc-900/70 px-3 py-1.5 
+                          text-zinc-200 hover:bg-zinc-800 hover:border-amber-400/70 transition"
+              >
+                 Community Threads
+              </Link>
+            </div>
+
+
+
+            {/* NEW: go to login */}
+            <Link
+              to="/login"
+              className="rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-1.5 text-sm hover:bg-zinc-700"
+            >
+              Login
+            </Link>
+
+            {/* NEW: go to profile */}
+            <Link
+              to="/profile"
+              className="rounded-lg border border-blue-600 bg-blue-600/10 px-3 py-1.5 text-sm text-blue-300 hover:bg-blue-600/20"
+            >
+              Profile
+            </Link>
+          </div>
         </div>
       </header>
 
@@ -165,6 +272,67 @@ async function submitRating() {
               {loading ? "Searching…" : "Search"}
             </button>
           </form>
+
+          {/* --- NEW: quick filter controls shown under the search bar --- */}
+          <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
+            {/* dropdown to choose type (shows all by default) */}
+            <select
+              value={typeFilter}
+              onChange={(e) => setTypeFilter(e.target.value)}
+              className="rounded-xl bg-zinc-900/70 border border-zinc-800 px-3 py-2"
+              title="Type"
+            >
+              <option>All</option>
+              <option>Game</option>
+              <option>Movie</option>
+            </select>
+
+            {/* box for starting year (oldest year to include) */}
+            <input
+              inputMode="numeric"
+              pattern="[0-9]*"
+              value={yearFrom}
+              onChange={(e) =>
+                setYearFrom(e.target.value.replace(/\D/g, "").slice(0, 4))
+              }
+              placeholder="Year from"
+              className="rounded-xl bg-zinc-900/70 border border-zinc-800 px-3 py-2"
+              title="Start year"
+            />
+
+            {/* box for ending year (latest year to include) */}
+            <input
+              inputMode="numeric"
+              pattern="[0-9]*"
+              value={yearTo}
+              onChange={(e) =>
+                setYearTo(e.target.value.replace(/\D/g, "").slice(0, 4))
+              }
+              placeholder="Year to"
+              className="rounded-xl bg-zinc-900/70 border border-zinc-800 px-3 py-2"
+              title="End year"
+            />
+
+            {/* text box for typing a platform name (like Xbox or Wii) */}
+            <input
+              value={platformFilter}
+              onChange={(e) => setPlatformFilter(e.target.value)}
+              placeholder="Platform (e.g., Xbox)"
+              className="rounded-xl bg-zinc-900/70 border border-zinc-800 px-3 py-2"
+              title="Platform"
+            />
+
+            {/* button that re-filters what’s already loaded (no new search call) */}
+            <button
+              type="button"
+              onClick={reapplyFilters}
+              className="rounded-xl border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm hover:bg-zinc-700"
+              title="Filter current results"
+            >
+              Apply Filters
+            </button>
+          </div>
+          {/* ------------------------------------------------ */}
 
           {/* small warning if backend is down (we still show mock results) */}
           {err && (
