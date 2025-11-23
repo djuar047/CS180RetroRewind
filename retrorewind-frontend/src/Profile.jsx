@@ -95,6 +95,7 @@ export default function Profile({ auth }) {
     if (userId && token) fetchRatings();
   }, [userId, token]);
 
+  // Handle profile form changes
   function handleChange(e) {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
@@ -124,6 +125,33 @@ export default function Profile({ auth }) {
     } catch (err) {
       console.error(err);
       alert("Server not reachable.");
+    }
+  }
+
+  // Remove item from library
+  async function removeFromLibrary(itemId) {
+    if (!userId || !token) return;
+
+    try {
+      const res = await fetch(`http://127.0.0.1:5000/profile/${userId}/library/remove`, {
+        method: "POST", // or DELETE depending on backend
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ id: itemId }),
+      });
+
+      if (!res.ok) throw new Error("Failed to remove item");
+
+      // Update library state immediately
+      setUser(prev => ({
+        ...prev,
+        library: prev.library.filter(item => item.id !== itemId),
+      }));
+    } catch (err) {
+      console.error(err);
+      alert("Failed to remove item from library");
     }
   }
 
@@ -219,10 +247,23 @@ export default function Profile({ auth }) {
         <div className="flex flex-col gap-3">
           {user.library && user.library.length > 0 ? (
             user.library.map((item, index) => (
-              <div key={index} className="bg-zinc-800 p-3 rounded-lg border border-zinc-700">
-                <p className="text-lg font-semibold text-white">{item.title}</p>
-                <p className="text-sm text-zinc-400">{item.type}</p>
-                <p className="text-sm text-zinc-500">{item.year}</p>
+              <div
+                key={index}
+                className="relative bg-zinc-800 p-3 rounded-lg border border-zinc-700 flex justify-between items-center"
+              >
+                <div>
+                  <p className="text-lg font-semibold text-white">{item.title}</p>
+                  <p className="text-sm text-zinc-400">{item.type}</p>
+                  <p className="text-sm text-zinc-500">{item.year}</p>
+                </div>
+                {/* Remove button */}
+                <button
+                  onClick={() => removeFromLibrary(item.id)}
+                  className="text-red-500 hover:text-red-400 font-bold text-lg ml-3"
+                  title="Remove from library"
+                >
+                  ×
+                </button>
               </div>
             ))
           ) : (

@@ -356,6 +356,22 @@ def get_ratings(media_id):
         r["user_id"] = str(r["user_id"])
     return jsonify(ratings)
 
+@app.post("/profile/<user_id>/library/remove")
+def remove_from_library(user_id):
+    data = request.json
+    item_id = data.get("id")
+    if not item_id:
+        return jsonify({"error": "missing_item_id"}), 400
+
+    result = db["users"].update_one(
+        {"_id": ObjectId(user_id)},
+        {"$pull": {"profile.library": {"id": item_id}}}
+    )
+
+    if result.modified_count == 0:
+        return jsonify({"error": "item_not_found"}), 404
+
+    return jsonify({"message": "item_removed"}), 200
 
 @app.get("/")
 def health():

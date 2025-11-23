@@ -44,6 +44,7 @@ function Home({ auth, setAuth }) {
   const [currentGame, setCurrentGame] = useState(null);
   const [stars, setStars] = useState(0);
   const [review, setReview] = useState("");
+  const [library, setLibrary] = useState([]); // IDs of items in the user's library
 
   // for displaying ratings in the UI (local only)
   const [ratings, setRatings] = useState({});
@@ -74,6 +75,18 @@ function Home({ auth, setAuth }) {
 
 //   loadTopItems();
 // }, []);
+
+useEffect(() => {
+  if (auth?.userId && auth?.token) {
+    fetch(`http://127.0.0.1:5000/profile/${auth.userId}/library`, {
+      headers: { Authorization: `Bearer ${auth.token}` },
+    })
+      .then(res => res.json())
+      .then(data => setLibrary(data.map(item => item.id)))
+      .catch(console.error);
+  }
+}, [auth]);
+
 
   // --- NEW: filter helper (used to narrow down the search results) ---
   function applyFilters(list) {
@@ -241,6 +254,7 @@ async function addToLibrary(item) {
     }
 
     alert(`${item.title} added to your library!`);
+    setLibrary(prev => [...prev, item.id]); // add to library state
   } catch (e) {
     console.error("Add-to-library error:", e);
     alert("Failed to add to library.");
@@ -518,11 +532,17 @@ async function removeRating() {
                 {/* fake actions for now (hook these up later) */}
                 <div className="mt-4 flex gap-2">
                   <button
-  className="rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-1.5 text-sm hover:bg-zinc-700"
+  className={`rounded-lg border px-3 py-1.5 text-sm ${
+    library.includes(m.id)
+      ? "bg-zinc-700 border-zinc-600 text-zinc-400 cursor-not-allowed"
+      : "bg-zinc-800 border-zinc-700 text-white hover:bg-zinc-700"
+  }`}
   onClick={() => addToLibrary(m)}
+  disabled={library.includes(m.id)}
 >
-  Add to Library
+  {library.includes(m.id) ? "In Library" : "Add to Library"}
 </button>
+
 
 {ratings[m.id] && (
   <div className="mt-3 text-sm text-amber-400">
