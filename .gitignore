@@ -9,6 +9,7 @@ retrorewind-frontend/node_modules/
 # Environment variables / secrets
 .env
 backend/.env
+backend/retrorewindKey.json
 
 # Build outputs
 dist/
