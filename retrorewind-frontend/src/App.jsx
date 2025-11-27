@@ -6,6 +6,7 @@ import { Routes, Route, Link } from "react-router-dom";
 import Login from "./Login.jsx";
 import Profile from "./Profile.jsx";
 import CreateAccount from "./CreateAccount.jsx";
+import { useEffect } from "react"; 
 
 
 /**
@@ -79,6 +80,83 @@ function Home({ auth, setAuth }) {
       return true;
     });
   }
+  useEffect(() => {
+  async function loadUserRatings() {
+    if (!auth?.userId) return;
+
+    try {
+      const res = await fetch(
+        `http://127.0.0.1:5000/profile/${auth.userId}/ratings`,
+        { headers: { Authorization: `Bearer ${auth.token}` } }
+      );
+      const data = await res.json();
+
+      if (!res.ok) return;
+
+      // Convert into dictionary: { media_id: {...rating} }
+      const mapped = {};
+      data.forEach((r) => {
+        mapped[r.media_id] = r;
+      });
+
+      setRatings(mapped);
+    } catch (err) {
+      console.error("Failed loading user ratings", err);
+    }
+  }
+
+  loadUserRatings();
+}, [auth]);
+
+async function updateRating(mediaId) {
+  const rating = ratings[mediaId];
+  if (!rating) return;
+
+  const ratingId = rating.rating_id || rating._id;
+
+  try {
+    const res = await fetch(`http://127.0.0.1:5000/ratings/${ratingId}`, {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${auth.token}`
+      },
+      body: JSON.stringify({
+        stars,
+        review_text: review
+      })
+    });
+
+    if (!res.ok) {
+      const msg = await res.text();
+      alert("Failed to update rating.\n" + msg);
+      return;
+    }
+
+    // update UI
+    setRatings(prev => ({
+      ...prev,
+      [mediaId]: {
+        ...prev[mediaId],
+        stars,
+        review,
+        rating_id: ratingId
+      }
+    }));
+
+    alert("Rating updated!");
+    setShowModal(false);
+    setStars(0);
+    setReview("");
+
+  } catch (err) {
+    console.error(err);
+    alert("Server error updating rating.");
+  }
+}
+
+
+
   // --------------------------------------------------
 
   // MOCK data to show something if the backend isn't running.
@@ -227,19 +305,33 @@ async function addToLibrary(item) {
 
   // Ratings 
   async function submitRating() {
+    if (ratings[currentGame.id]) {
+      await updateRating(currentGame.id);
+      return;
+      }
     if (!stars) return alert("Please select a star rating first.");
     try {
       const res = await fetch("http://127.0.0.1:5000/ratings", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {"Content-Type": "application/json",
+        Authorization: `Bearer ${auth.token}`},
         body: JSON.stringify({
-          user_id: "1",
+          user_id: auth.userId,
           media_id: currentGame.id,
+          title: currentGame.title,
+          cover_url: currentGame.coverUrl,   
+          type: currentGame.type,
+          year: currentGame.year,
           stars,
           review_text: review,
         }),
       });
-      if (!res.ok) throw new Error(await res.text());
+      if (!res.ok) {
+        const message = await res.text();
+        console.error("Rating submit error:", message);
+        alert("Failed to submit rating.\n\nServer says: " + message);
+        return;
+}
       const data = await res.json();
       alert("Thanks for rating!");
       setRatings((prev) => ({
@@ -253,6 +345,38 @@ async function addToLibrary(item) {
       alert("Failed to submit rating.");
     }
   }
+  async function loadRatings() {
+  const res = await fetch(
+    `http://127.0.0.1:5000/profile/${auth.userId}/ratings`,
+    { headers: { Authorization: `Bearer ${auth.token}` } }
+  );
+  const data = await res.json();
+  /*setRatings((prev) => ({
+    ...prev,
+    [mediaId]: data
+  }));*/
+  const mapped = {};
+  data.forEach((r) => (mapped[r.media_id] = r));
+
+  setRatings(mapped);
+}
+
+async function deleteRating(ratingId, mediaId) {
+  const res = await fetch(`http://127.0.0.1:5000/ratings/${ratingId}`, {
+    method: "DELETE",
+  });
+
+  if (!res.ok) return alert("Failed to delete.");
+
+  // remove from local UI
+  setRatings((prev) => {
+    const copy = {...prev};
+    delete copy[mediaId];
+    return copy;
+  });
+
+  alert("Deleted!");
+}
 
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100">
@@ -431,10 +555,15 @@ async function addToLibrary(item) {
 
         {/* Cards grid: one card per result item */}
         <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {items.map((m) => (
+          {items.map((m) => {
+            const rated = ratings[m.id];
+            return (
             <article
               key={m.id || m.title}  // fallback to title if id missing
-              className="group flex gap-4 rounded-2xl border border-zinc-800 bg-zinc-900/60 p-4 hover:border-amber-400/70 hover:shadow-[0_0_0_1px] hover:shadow-amber-400/30 transition"
+              className={`group flex gap-4 rounded-2xl p-4 transition border
+              ${rated
+              ? "bg-amber-900/20 border-amber-500 shadow-[0_0_12px_rgba(251,191,36,0.4)]"
+              : "bg-zinc-900/60 border-zinc-800 hover:border-amber-400/70 hover:shadow-[0_0_0_1px] hover:shadow-amber-400/30"}`}
             >
               {/* cover image (or placeholder) */}
               <img
@@ -443,6 +572,12 @@ async function addToLibrary(item) {
                 className="h-40 w-28 rounded-xl object-cover ring-1 ring-zinc-800 group-hover:ring-amber-400/60"
               />
               <div className="flex-1">
+                {/* RATED BADGE */}
+          {rated && (
+                 <span className="inline-block mb-2 px-2 py-1 text-xs font-semibold rounded bg-amber-600/20 text-amber-400 border border-amber-500/40">
+                  Rated ★ {rated.stars}
+                  </span>
+                )}
                 <div className="flex items-center justify-between">
                   {/* title on the left */}
                   <h3 className="text-lg font-semibold">{m.title}</h3>
@@ -462,27 +597,24 @@ async function addToLibrary(item) {
                 {/* fake actions for now (hook these up later) */}
                 <div className="mt-4 flex gap-2">
                   <button
+
   className="rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-1.5 text-sm hover:bg-zinc-700"
   onClick={() => addToLibrary(m)}
 >
   Add to Watchlist
 </button>
 
-{ratings[m.id] && (
-  <div className="mt-3 text-sm text-amber-400">
-    Rated {ratings[m.id].stars} / 5 — "{ratings[m.id].review}"
-  </div>
-)}
 
 <div className="mt-4 flex gap-2">
   <button
     className="rounded-lg border border-blue-600 bg-blue-600/10 px-3 py-1.5 text-sm text-blue-300"
     onClick={() => {
       setCurrentGame(m);
+      loadRatings();
       setShowModal(true);
     }}
   >
-    Rate ★
+     {rated ? "Update Rating" : "Rate ★"}
   </button>
 </div>
 {showModal && (
@@ -531,7 +663,7 @@ async function addToLibrary(item) {
                 </div>
               </div>
             </article>
-          ))}
+);})}
 
           {/* if not loading and no items yet, show a friendly empty state */}
           {!loading && !items.length && (
