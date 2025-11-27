@@ -201,9 +201,30 @@ def get_library(user_id):
 
 @app.get("/profile/<user_id>/ratings")
 def get_user_ratings(user_id):
-    # Optionally, verify token here if you want auth
-    ratings = list(db["ratings"].find({"user_id": user_id}, {"_id": 0}))
-    return jsonify(ratings), 200
+    # Convert string → ObjectId if valid
+    try:
+        uid = ObjectId(user_id)
+    except:
+        uid = user_id  # fallback for non-ObjectId IDs
+
+    ratings = list(db["ratings"].find({"user_id": uid}))
+
+
+    fixed = []
+    for r in ratings:
+        fixed.append({
+        "rating_id": str(r["_id"]),
+        "media_id": str(r["media_id"]),
+        "title": r.get("title", ""),
+        "cover_url": r.get("cover_url", ""),
+        "type": r.get("type", ""),
+        "year": r.get("year", ""),
+        "stars": r.get("stars"),
+        "review_text": r.get("review_text", ""),
+        "date_created": r.get("date_created"),
+})
+
+    return jsonify(fixed), 200
 
 
 def get_access_token() -> str:
@@ -309,15 +330,29 @@ def movies():
 def submit_rating():
     data = request.json
     user_id = data.get("user_id")
-    media_id = data.get("media_id")
+    media_id = str(data.get("media_id"))
     stars = data.get("stars")
     review_text = data.get("review_text", "")
     if not all([user_id, media_id, stars]):
         return jsonify({"error": "missing_fields"}), 400
+    try:
+        uid = ObjectId(user_id)
+    except:
+        uid = user_id
+    existing = db["ratings"].find_one({"user_id": uid, "media_id": media_id})
+    if existing:
+        return jsonify({
+            "error": "already_rated",
+            "rating_id": str(existing["_id"])
+        }), 409
 
     rating = {
         "user_id": ObjectId(user_id) if ObjectId.is_valid(user_id) else user_id,
-        "media_id": ObjectId(media_id) if ObjectId.is_valid(media_id) else media_id,
+        "media_id": str(media_id),
+        "title": data.get("title", ""),
+        "cover_url": data.get("cover_url", ""),
+        "type": data.get("type", ""),
+        "year": data.get("year", ""),
         "stars": int(stars),
         "review_text": review_text,
         "date_created": datetime.utcnow()
@@ -328,12 +363,54 @@ def submit_rating():
 
 @app.get("/ratings/<media_id>")
 def get_ratings(media_id):
+    # search by object id instead
+    query_id = ObjectId(media_id) if ObjectId.is_valid(media_id) else media_id
     ratings = list(db["ratings"].find({"media_id": media_id}))
     for r in ratings:
         r["_id"] = str(r["_id"])
         r["user_id"] = str(r["user_id"])
+        r["media_id"] = str(r["media_id"])
     return jsonify(ratings)
 
+# Delete ratings 
+@app.delete("/ratings/<rating_id>")
+def delete_rating(rating_id):
+    try:
+        rid = ObjectId(rating_id)
+    except:
+        return jsonify({"error": "invalid_id"}), 400
+
+    result = db["ratings"].delete_one({"_id": rid})
+
+    if result.deleted_count == 0:
+        return jsonify({"error": "not_found"}), 404
+    
+    return jsonify({"status": "deleted"}), 200
+
+
+@app.put("/ratings/<rating_id>")
+def update_rating(rating_id):
+    try:
+        rid = ObjectId(rating_id)
+    except:
+        return jsonify({"error": "invalid_id"}), 400
+
+    data = request.json
+    stars = data.get("stars")
+    review_text = data.get("review_text", "")
+
+    if not stars:
+        return jsonify({"error": "missing_stars"}), 400
+
+    result = db["ratings"].update_one(
+        {"_id": rid},
+        {"$set": {"stars": int(stars), "review_text": review_text}}
+    )
+
+    if result.modified_count == 0:
+        return jsonify({"error": "not_found"}), 404
+
+    return jsonify({"status": "updated"}), 200
 
 @app.get("/")
 def health():
