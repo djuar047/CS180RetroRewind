@@ -65,11 +65,19 @@ export default function Profile({ auth }) {
   useEffect(() => {
     async function fetchLibrary() {
       try {
-        const res = await fetch(`http://127.0.0.1:5000/profile/${userId}/library`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
+        const res = await fetch(
+          `http://127.0.0.1:5000/profile/${userId}/library`,
+          {
+            headers: { Authorization: `Bearer ${token}` },
+          }
+        );
         const data = await res.json();
-        if (res.ok) setUser(prev => ({ ...prev, library: data }));
+        if (res.ok) {
+          setUser((prev) => ({
+            ...(prev || {}),
+            library: data,
+          }));
+        }
       } catch (err) {
         console.error(err);
       }
@@ -82,11 +90,19 @@ export default function Profile({ auth }) {
   useEffect(() => {
     async function fetchRatings() {
       try {
-        const res = await fetch(`http://127.0.0.1:5000/profile/${userId}/ratings`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
+        const res = await fetch(
+          `http://127.0.0.1:5000/profile/${userId}/ratings`,
+          {
+            headers: { Authorization: `Bearer ${token}` },
+          }
+        );
         const data = await res.json();
-        if (res.ok) setUser(prev => ({ ...prev, ratings: data }));
+        if (res.ok) {
+          setUser((prev) => ({
+            ...(prev || {}),
+            ratings: data,
+          }));
+        }
       } catch (err) {
         console.error(err);
       }
@@ -97,25 +113,57 @@ export default function Profile({ auth }) {
 
   function handleChange(e) {
     const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
+    setFormData((prev) => ({ ...prev, [name]: value }));
+  }
+
+  async function deleteRating(ratingId) {
+    if (!window.confirm("Delete this rating?")) return;
+
+    try {
+      const res = await fetch(`http://127.0.0.1:5000/ratings/${ratingId}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (!res.ok) {
+        const text = await res.text();
+        return alert(text || "Failed to delete rating");
+      }
+
+      // Remove from UI
+      setUser((prev) => ({
+        ...prev,
+        ratings: (prev?.ratings || []).filter(
+          (r) => r.rating_id !== ratingId
+        ),
+      }));
+
+      alert("Rating deleted!");
+    } catch (err) {
+      console.error(err);
+      alert("Server error deleting rating.");
+    }
   }
 
   async function handleUpdate(e) {
     e.preventDefault();
     try {
-      const res = await fetch(`http://127.0.0.1:5000/profile/${userId}/update`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(formData),
-      });
+      const res = await fetch(
+        `http://127.0.0.1:5000/profile/${userId}/update`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify(formData),
+        }
+      );
 
       const data = await res.json();
 
       if (res.ok) {
-        setUser(prev => ({ ...prev, ...formData }));
+        setUser((prev) => ({ ...prev, ...formData }));
         setEditMode(false);
         alert("Profile updated successfully!");
       } else {
@@ -127,8 +175,14 @@ export default function Profile({ auth }) {
     }
   }
 
-  if (loading) return <p className="text-center mt-10 text-zinc-300">Loading...</p>;
-  if (error) return <p className="text-center mt-10 text-red-400">{error}</p>;
+  if (loading)
+    return (
+      <p className="text-center mt-10 text-zinc-300">Loading...</p>
+    );
+  if (error)
+    return (
+      <p className="text-center mt-10 text-red-400">{error}</p>
+    );
   if (!user) return null;
 
   return (
@@ -144,14 +198,19 @@ export default function Profile({ auth }) {
 
         <div className="flex flex-col items-center mt-6">
           <img
-            src={formData.avatar_url || "https://placehold.co/120x120?text=User"}
+            src={
+              formData.avatar_url ||
+              "https://placehold.co/120x120?text=User"
+            }
             alt="User avatar"
             className="w-24 h-24 rounded-full border border-zinc-700 mb-4"
           />
 
           {!editMode ? (
             <>
-              <h1 className="text-2xl font-bold text-amber-400">{user.username}</h1>
+              <h1 className="text-2xl font-bold text-amber-400">
+                {user.username}
+              </h1>
               <p className="text-sm text-zinc-400">{user.email}</p>
               <p className="mt-2 text-sm text-zinc-300">{user.bio}</p>
               <button
@@ -162,7 +221,10 @@ export default function Profile({ auth }) {
               </button>
             </>
           ) : (
-            <form onSubmit={handleUpdate} className="w-full flex flex-col gap-3 mt-2">
+            <form
+              onSubmit={handleUpdate}
+              className="w-full flex flex-col gap-3 mt-2"
+            >
               <input
                 type="text"
                 name="username"
@@ -197,7 +259,10 @@ export default function Profile({ auth }) {
                 className="p-2 rounded bg-zinc-800 border border-zinc-700 resize-none"
               />
               <div className="flex gap-2 justify-center mt-2">
-                <button type="submit" className="bg-blue-600 hover:bg-blue-500 px-4 py-2 rounded">
+                <button
+                  type="submit"
+                  className="bg-blue-600 hover:bg-blue-500 px-4 py-2 rounded"
+                >
                   Save
                 </button>
                 <button
@@ -215,39 +280,83 @@ export default function Profile({ auth }) {
 
       {/* Library Section */}
       <div className="w-full max-w-md bg-zinc-900 border border-zinc-800 rounded-xl p-6 shadow-md mb-6">
-        <h2 className="text-xl font-semibold text-amber-400 text-center mb-4">My Library</h2>
+        <h2 className="text-xl font-semibold text-amber-400 text-center mb-4">
+          My Library
+        </h2>
         <div className="flex flex-col gap-3">
           {user.library && user.library.length > 0 ? (
             user.library.map((item, index) => (
-              <div key={index} className="bg-zinc-800 p-3 rounded-lg border border-zinc-700">
-                <p className="text-lg font-semibold text-white">{item.title}</p>
+              <div
+                key={index}
+                className="bg-zinc-800 p-3 rounded-lg border border-zinc-700"
+              >
+                <p className="text-lg font-semibold text-white">
+                  {item.title}
+                </p>
                 <p className="text-sm text-zinc-400">{item.type}</p>
                 <p className="text-sm text-zinc-500">{item.year}</p>
               </div>
             ))
           ) : (
-            <p className="text-center text-zinc-400 mt-2">Your watchlist is empty</p>
+            <p className="text-center text-zinc-400 mt-2">
+              Your watchlist is empty
+            </p>
           )}
         </div>
       </div>
 
       {/* Ratings Section */}
       <div className="w-full max-w-md bg-zinc-900 border border-zinc-800 rounded-xl p-6 shadow-md">
-        <h2 className="text-xl font-semibold text-amber-400 text-center mb-4">My Ratings</h2>
-        <div className="flex flex-col gap-3">
+        <h2 className="text-xl font-semibold text-amber-400 text-center mb-4">
+          My Ratings
+        </h2>
+        <div className="flex flex-col gap-4">
           {user.ratings && user.ratings.length > 0 ? (
-            user.ratings.map((rating, index) => (
-              <div key={index} className="bg-zinc-800 p-3 rounded-lg border border-zinc-700">
-                <p className="text-lg font-semibold text-white">{rating.title}</p>
-                <p className="text-sm text-zinc-400">Score: {rating.score}/10</p>
-                <p className="text-sm text-zinc-500">{rating.comment}</p>
+            user.ratings.map((rating) => (
+              <div
+                key={rating.rating_id}
+                className="bg-zinc-800 p-3 rounded-lg border border-zinc-700 flex gap-3"
+              >
+                <img
+                  src={
+                    rating.cover_url ||
+                    "https://placehold.co/80x110?text=No+Cover"
+                  }
+                  alt={rating.title}
+                  className="w-20 h-28 rounded-md object-cover border border-zinc-700"
+                />
+
+                <div className="flex-1">
+                  <p className="text-lg font-semibold text-white">
+                    {rating.title}
+                  </p>
+                  <p className="text-sm text-zinc-400">
+                    {rating.type} • {rating.year}
+                  </p>
+                  <p className="text-sm text-amber-400 mt-1">
+                    ★ {rating.stars} / 5
+                  </p>
+                  <p className="text-sm text-zinc-500 mt-1">
+                    {rating.review_text}
+                  </p>
+
+                  <button
+                    onClick={() => deleteRating(rating.rating_id)}
+                    className="mt-2 text-red-400 hover:text-red-300 text-sm"
+                  >
+                    Delete Rating
+                  </button>
+                </div>
               </div>
             ))
           ) : (
-            <p className="text-center text-zinc-400 mt-2">You have not rated anything yet</p>
+            <p className="text-center text-zinc-400 mt-2">
+              You have not rated anything yet
+            </p>
           )}
         </div>
       </div>
     </div>
   );
 }
+

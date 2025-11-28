@@ -6,7 +6,7 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 from dotenv import load_dotenv
 from pymongo import MongoClient
-from firebase_setup import db as firebase_db, auth, bucket  # firebase db not used here but kept for compatibility
+from firebase_setup import db as firebase_db, auth, bucket  # firebase db (if you ever need it)
 from authorization import create_user, verify_token
 from authorization_paths import auth_blueprint
 from bson import ObjectId
@@ -21,7 +21,7 @@ from profile import Profile
 # Load environment
 load_dotenv()
 
-# MongoDB setup
+# ----- MongoDB setup -----
 MONGO_URI = os.getenv("MONGO_URI")
 if not MONGO_URI:
     raise RuntimeError("Missing MONGO_URI in .env")
@@ -41,7 +41,7 @@ OMDB_API_KEY = os.getenv("OMDB_API_KEY")
 if not CLIENT_ID or not CLIENT_SECRET:
     raise RuntimeError("Missing CLIENT_ID/CLIENT_SECRET in .env")
 
-# Flask setup
+# ----- Flask setup -----
 app = Flask(__name__)
 CORS(
     app,
@@ -62,7 +62,6 @@ app.register_blueprint(auth_blueprint, url_prefix="/auth")
 
 # Token cache for IGDB
 _token_cache = {"value": None, "expires_at": 0}
-
 
 # ---------- AUTH / USERS / PROFILE ----------
 
@@ -231,8 +230,31 @@ def get_library(user_id):
 
 @app.get("/profile/<user_id>/ratings")
 def get_user_ratings(user_id):
-    ratings = list(db["ratings"].find({"user_id": user_id}, {"_id": 0}))
-    return jsonify(ratings), 200
+    # Convert string → ObjectId if valid
+    try:
+        uid = ObjectId(user_id)
+    except Exception:
+        uid = user_id  # fallback for non-ObjectId IDs
+
+    ratings = list(db["ratings"].find({"user_id": uid}))
+
+    fixed = []
+    for r in ratings:
+        fixed.append(
+            {
+                "rating_id": str(r["_id"]),
+                "media_id": str(r["media_id"]),
+                "title": r.get("title", ""),
+                "cover_url": r.get("cover_url", ""),
+                "type": r.get("type", ""),
+                "year": r.get("year", ""),
+                "stars": r.get("stars"),
+                "review_text": r.get("review_text", ""),
+                "date_created": r.get("date_created"),
+            }
+        )
+
+    return jsonify(fixed), 200
 
 
 # ---------- IGDB / OMDB SEARCH ----------
@@ -360,15 +382,34 @@ def movies():
 def submit_rating():
     data = request.json or {}
     user_id = data.get("user_id")
-    media_id = data.get("media_id")
+    media_id = str(data.get("media_id"))
     stars = data.get("stars")
     review_text = data.get("review_text", "")
     if not all([user_id, media_id, stars]):
         return jsonify({"error": "missing_fields"}), 400
 
+    # normalize user_id for existing check
+    try:
+        uid = ObjectId(user_id)
+    except Exception:
+        uid = user_id
+
+    existing = db["ratings"].find_one({"user_id": uid, "media_id": media_id})
+    if existing:
+        return jsonify(
+            {
+                "error": "already_rated",
+                "rating_id": str(existing["_id"]),
+            }
+        ), 409
+
     rating = {
         "user_id": ObjectId(user_id) if ObjectId.is_valid(user_id) else user_id,
-        "media_id": ObjectId(media_id) if ObjectId.is_valid(media_id) else media_id,
+        "media_id": str(media_id),
+        "title": data.get("title", ""),
+        "cover_url": data.get("cover_url", ""),
+        "type": data.get("type", ""),
+        "year": data.get("year", ""),
         "stars": int(stars),
         "review_text": review_text,
         "date_created": datetime.utcnow(),
@@ -379,14 +420,68 @@ def submit_rating():
 
 @app.get("/ratings/<media_id>")
 def get_ratings(media_id):
-    ratings = list(db["ratings"].find({"media_id": media_id}))
+    query_id = ObjectId(media_id) if ObjectId.is_valid(media_id) else media_id
+    ratings = list(db["ratings"].find({"media_id": query_id}))
+    fixed = []
     for r in ratings:
-        r["_id"] = str(r["_id"])
-        r["user_id"] = str(r["user_id"])
-    return jsonify(ratings)
+        fixed.append(
+            {
+                "rating_id": str(r["_id"]),
+                "user_id": str(r["user_id"]),
+                "media_id": str(r["media_id"]),
+                "title": r.get("title", ""),
+                "cover_url": r.get("cover_url", ""),
+                "type": r.get("type", ""),
+                "year": r.get("year", ""),
+                "stars": r.get("stars"),
+                "review_text": r.get("review_text", ""),
+                "date_created": r.get("date_created"),
+            }
+        )
+    return jsonify(fixed), 200
 
 
-# ---------- MISC ----------
+@app.delete("/ratings/<rating_id>")
+def delete_rating(rating_id):
+    try:
+        rid = ObjectId(rating_id)
+    except Exception:
+        return jsonify({"error": "invalid_id"}), 400
+
+    result = db["ratings"].delete_one({"_id": rid})
+
+    if result.deleted_count == 0:
+        return jsonify({"error": "not_found"}), 404
+
+    return jsonify({"status": "deleted"}), 200
+
+
+@app.put("/ratings/<rating_id>")
+def update_rating(rating_id):
+    try:
+        rid = ObjectId(rating_id)
+    except Exception:
+        return jsonify({"error": "invalid_id"}), 400
+
+    data = request.json or {}
+    stars = data.get("stars")
+    review_text = data.get("review_text", "")
+
+    if not stars:
+        return jsonify({"error": "missing_stars"}), 400
+
+    result = db["ratings"].update_one(
+        {"_id": rid},
+        {"$set": {"stars": int(stars), "review_text": review_text}},
+    )
+
+    if result.modified_count == 0:
+        return jsonify({"error": "not_found"}), 404
+
+    return jsonify({"status": "updated"}), 200
+
+
+# ---------- MISC / HEALTH ----------
 
 @app.get("/")
 def health():
@@ -395,3 +490,4 @@ def health():
 
 if __name__ == "__main__":
     app.run(host="127.0.0.1", port=5000, debug=True)
+

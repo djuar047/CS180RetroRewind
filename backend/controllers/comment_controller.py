@@ -3,7 +3,6 @@ from pymongo import MongoClient
 from models.comment_model import Comment
 from bson import ObjectId
 
-
 # Connect directly to MongoDB (avoids circular import)
 client = MongoClient("mongodb://localhost:27017/")
 db = client["retrorewind"]
@@ -90,3 +89,4 @@ def delete_comment(comment_id):
         return jsonify({"error": "Comment not found"}), 404
 
     return jsonify({"message": "Comment marked as deleted"}), 200
+
