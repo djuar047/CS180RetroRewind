@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Routes, Route, Link } from "react-router-dom";
-
+import React from "react";
 import bear from "./assets/bear.webp";
 import Login from "./Login.jsx";
 import Profile from "./Profile.jsx";
