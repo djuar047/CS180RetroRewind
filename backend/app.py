@@ -533,6 +533,23 @@ def get_ratings(media_id):
         )
     return jsonify(fixed), 200
 
+@app.route("/profile/<user_id>/library/<item_id>", methods=["DELETE"])
+def remove_library_item(user_id, item_id):
+    # convert to int if needed
+    try:
+        item_id_int = int(item_id)
+    except ValueError:
+        item_id_int = item_id
+
+    result = db["users"].update_one(
+        {"_id": ObjectId(user_id)},
+        {"$pull": {"profile.library": {"id": item_id_int}}}
+    )
+    if result.modified_count:
+        return jsonify({"message": "Item removed"}), 200
+    else:
+        return jsonify({"error": "Item not found"}), 404
+
 
 @app.delete("/ratings/<rating_id>")
 def delete_rating(rating_id):
@@ -588,6 +605,7 @@ def update_rating(rating_id):
         return jsonify({"error": "not_found"}), 404
 
     return jsonify({"status": "updated"}), 200
+
 
 
 # ---------- MISC / HEALTH ----------

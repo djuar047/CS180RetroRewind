@@ -55,16 +55,51 @@ export default function Profile() {
     setIsEditingBio(true);
   }
 
-  // save updated bio (local only)
-  function handleSaveBio() {
-    const cleaned = bioDraft.trim();
+  async function removeFromLibrary(itemId) {
+  if (!window.confirm("Remove this item from your library?")) return;
+
+  try {
+    const res = await fetch(
+      `http://127.0.0.1:5000/profile/${userId}/library/${itemId}`,
+      {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      }
+    );
+
+    if (!res.ok) {
+      const data = await res.json();
+      return alert(data.error || "Server error removing item.");
+    }
+
+    // Remove from UI
     setUser((prev) => ({
       ...prev,
-      bio: cleaned || prev.bio,
+      library: (prev?.library || []).filter((i) => i.id !== itemId),
     }));
-    localStorage.setItem("rr_bio", cleaned || user.bio);
-    setIsEditingBio(false);
+
+    alert("Item removed!");
+  } catch (err) {
+    console.error(err);
+    alert("Server error removing item.");
   }
+}
+
+
+  async function handleUpdate(e) {
+    e.preventDefault();
+    try {
+      const res = await fetch(
+        `http://127.0.0.1:5000/profile/${userId}/update`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify(formData),
+        }
+      );
 
   // cancel editing
   function handleCancelEdit() {
@@ -135,19 +170,60 @@ export default function Profile() {
             </div>
           )}
         </div>
+      </div>
+<div className="w-full max-w-6xl flex flex-col lg:flex-row gap-6 justify-center mx-auto">
 
-        {/* action buttons */}
-        <div className="mt-6 flex flex-wrap justify-center gap-3">
-          {/* edit bio */}
-          {!isEditingBio && (
-            <button
-              type="button"
-              onClick={handleEditBio}
-              className="rounded-lg border border-zinc-700 bg-zinc-800 px-4 py-2 text-sm hover:bg-zinc-700"
-            >
-              Edit Bio
-            </button>
-          )}
+      {/* Library Section */}
+<div className="w-full max-w-md bg-zinc-900 border border-zinc-800 rounded-xl p-6 shadow-md mb-6">
+  <h2 className="text-xl font-semibold text-amber-400 text-center mb-4">
+    My Library
+  </h2>
+  <div className="flex flex-col gap-3">
+    {user.library && user.library.length > 0 ? (
+      user.library.map((item, index) => (
+        <div
+          key={index}
+          className="bg-zinc-800 p-3 rounded-lg border border-zinc-700 flex justify-between items-center"
+        >
+          <div>
+            <p className="text-lg font-semibold text-white">{item.title}</p>
+            <p className="text-sm text-zinc-400">{item.type}</p>
+            <p className="text-sm text-zinc-500">{item.year}</p>
+          </div>
+          <button
+            onClick={() => removeFromLibrary(item.id)}
+            className="ml-4 text-red-400 hover:text-red-300 text-sm px-2 py-1 border border-red-400 rounded"
+          >
+            Remove
+          </button>
+        </div>
+      ))
+    ) : (
+      <p className="text-center text-zinc-400 mt-2">Your watchlist is empty</p>
+    )}
+  </div>
+</div>
+
+      {/* Ratings Section */}
+      <div className="w-full max-w-md bg-zinc-900 border border-zinc-800 rounded-xl p-6 shadow-md">
+        <h2 className="text-xl font-semibold text-amber-400 text-center mb-4">
+          My Ratings
+        </h2>
+        <div className="flex flex-col gap-4">
+          {user.ratings && user.ratings.length > 0 ? (
+            user.ratings.map((rating) => (
+              <div
+                key={rating.rating_id}
+                className="bg-zinc-800 p-3 rounded-lg border border-zinc-700 flex gap-3"
+              >
+                <img
+                  src={
+                    rating.cover_url ||
+                    "https://placehold.co/80x110?text=No+Cover"
+                  }
+                  alt={rating.title}
+                  className="w-20 h-28 rounded-md object-cover border border-zinc-700"
+                />
 
           {/* go home */}
           <button
@@ -168,6 +244,7 @@ export default function Profile() {
           </button>
         </div>
       </div>
+    </div>
     </div>
   );
 }

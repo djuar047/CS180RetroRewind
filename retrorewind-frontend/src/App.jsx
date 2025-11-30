@@ -51,6 +51,7 @@ function Home({ auth, setAuth }) {
   const [review, setReview] = useState("");
   const [library, setLibrary] = useState([]); // IDs of items in the user's library
   const [ratings, setRatings] = useState({}); // { mediaId: { stars, review } }
+  const [libraryIds, setLibraryIds] = useState([]);
 
   // filters
   const [typeFilter, setTypeFilter] = useState("All");
@@ -176,45 +177,43 @@ function Home({ auth, setAuth }) {
   }
 
   async function addToLibrary(item) {
-    if (!auth?.userId || !auth?.token) {
-      alert("Please log in to add to your library.");
-      return;
-    }
+  if (!auth?.userId || !auth?.token) {
+    alert("Please log in to add to your library.");
+    return;
+  }
 
-    try {
-      const res = await fetch(
-        `http://127.0.0.1:5000/profile/${auth.userId}/library/add`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${auth.token}`,
-          },
-          body: JSON.stringify({
-            id: item.id,
-            title: item.title,
-            type: item.type,
-            year: item.year || "",
-            coverUrl: item.coverUrl || "",
-          }),
-        }
-      );
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || "Failed to add to library");
+  try {
+    const res = await fetch(
+      `http://127.0.0.1:5000/profile/${auth.userId}/library/add`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${auth.token}`,
+        },
+        body: JSON.stringify({
+          id: item.id,
+          title: item.title,
+          type: item.type,
+          year: item.year || "",
+          coverUrl: item.coverUrl || "",
+        }),
       }
-      alert(`${item.title} added to your library!`);
-    } catch (err) {
-      console.error("Add-to-library error:", err);
-      alert("Failed to add to library.");
+    );
+    const data = await res.json();
+    if (!res.ok) {
+      throw new Error(data.error || "Failed to add to library");
     }
 
+    // disable button by updating state
+    setLibraryIds((prev) => [...prev, item.id]);
     alert(`${item.title} added to your library!`);
-    setLibrary(prev => [...prev, item.id]); // add to library state
-  } catch (e) {
-    console.error("Add-to-library error:", e);
+  } catch (err) {
+    console.error("Add-to-library error:", err);
     alert("Failed to add to library.");
   }
+}
+
 
   async function submitRating() {
     if (!currentGame) return;
@@ -475,34 +474,40 @@ function Home({ auth, setAuth }) {
                     {m.summary}
                   </p>
 
-                  <div className="mt-4 flex flex-col gap-2">
-                    <button
-                      className="rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-1.5 text-sm hover:bg-zinc-700"
-                      onClick={() => addToLibrary(m)}
-                    >
-                      Add to Library
-                    </button>
+<div className="mt-4 flex flex-col gap-2">
+  {auth?.userId && (
+    <button
+      className="rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-1.5 text-sm hover:bg-zinc-700"
+      onClick={() => addToLibrary(m)}
+      disabled={libraryIds.includes(m.id)}
+    >
+      Add to Library
+    </button>
+  )}
 
-                    {ratings[m.id] && (
-                      <div className="mt-1 text-sm text-amber-400">
-                        Rated {ratings[m.id].stars} / 5 — "{ratings[m.id].review}"
-                      </div>
-                    )}
+  {ratings[m.id] && (
+    <div className="mt-1 text-sm text-amber-400">
+      Rated {ratings[m.id].stars} / 5 — "{ratings[m.id].review}"
+    </div>
+  )}
 
-                    <div className="mt-1 flex gap-2">
-                      <button
-                        className="rounded-lg border border-blue-600 bg-blue-600/10 px-3 py-1.5 text-sm text-blue-300"
-                        onClick={() => {
-                          setCurrentGame(m);
-                          setStars(ratings[m.id]?.stars || 0);
-                          setReview(ratings[m.id]?.review || "");
-                          setShowModal(true);
-                        }}
-                      >
-                        {rated ? "Update Rating" : "Rate ★"}
-                      </button>
-                    </div>
-                  </div>
+  {auth?.userId && (
+    <div className="mt-1 flex gap-2">
+      <button
+        className="rounded-lg border border-blue-600 bg-blue-600/10 px-3 py-1.5 text-sm text-blue-300"
+        onClick={() => {
+          setCurrentGame(m);
+          setStars(ratings[m.id]?.stars || 0);
+          setReview(ratings[m.id]?.review || "");
+          setShowModal(true);
+        }}
+      >
+        {rated ? "Update Rating" : "Rate ★"}
+      </button>
+    </div>
+  )}
+</div>
+
                 </div>
               </article>
             );
