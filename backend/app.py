@@ -417,6 +417,28 @@ def submit_rating():
     result = db["ratings"].insert_one(rating)
     return jsonify({"rating_id": str(result.inserted_id)}), 201
 
+@app.delete("/ratings")
+def delete_rating():
+    data = request.json
+    user_id = data.get("user_id")
+    media_id = data.get("media_id")
+
+    if not user_id or not media_id:
+        return jsonify({"error": "missing_fields"}), 400
+
+    # Match the same ObjectId logic you use when inserting
+    user_key = ObjectId(user_id) if ObjectId.is_valid(user_id) else user_id
+    media_key = ObjectId(media_id) if ObjectId.is_valid(media_id) else media_id
+
+    result = db["ratings"].delete_one({
+        "user_id": user_key,
+        "media_id": media_key
+    })
+
+    if result.deleted_count == 0:
+        return jsonify({"error": "rating_not_found"}), 404
+
+    return jsonify({"message": "rating_deleted"}), 200
 
 @app.get("/ratings/<media_id>")
 def get_ratings(media_id):
@@ -455,6 +477,22 @@ def delete_rating(rating_id):
 
     return jsonify({"status": "deleted"}), 200
 
+@app.post("/profile/<user_id>/library/remove")
+def remove_from_library(user_id):
+    data = request.json
+    item_id = data.get("id")
+    if not item_id:
+        return jsonify({"error": "missing_item_id"}), 400
+
+    result = db["users"].update_one(
+        {"_id": ObjectId(user_id)},
+        {"$pull": {"profile.library": {"id": item_id}}}
+    )
+
+    if result.modified_count == 0:
+        return jsonify({"error": "item_not_found"}), 404
+
+    return jsonify({"message": "item_removed"}), 200
 
 @app.put("/ratings/<rating_id>")
 def update_rating(rating_id):
