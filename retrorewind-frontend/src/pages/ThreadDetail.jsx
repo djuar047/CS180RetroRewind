@@ -4,34 +4,33 @@ import { useLocation, useParams, Link } from "react-router-dom";
 const API_BASE = "http://127.0.0.1:5000";
 
 function timeAgo(dateString) {
-    if (!dateString) return "Unknown date";
-  
-    const now = new Date();
-    const then = new Date(dateString);
-    const seconds = Math.floor((now - then) / 1000);
-  
-    if (seconds < 5) return "Just now";
-    if (seconds < 60) return `${seconds} seconds ago`;
-  
-    const minutes = Math.floor(seconds / 60);
-    if (minutes < 60) return `${minutes} minute${minutes !== 1 ? "s" : ""} ago`;
-  
-    const hours = Math.floor(minutes / 60);
-    if (hours < 24) return `${hours} hour${hours !== 1 ? "s" : ""} ago`;
-  
-    const days = Math.floor(hours / 24);
-    if (days < 7) return `${days} day${days !== 1 ? "s" : ""} ago`;
-  
-    const weeks = Math.floor(days / 7);
-    if (weeks < 4) return `${weeks} week${weeks !== 1 ? "s" : ""} ago`;
-  
-    const months = Math.floor(days / 30);
-    if (months < 12) return `${months} month${months !== 1 ? "s" : ""} ago`;
-  
-    const years = Math.floor(days / 365);
-    return `${years} year${years !== 1 ? "s" : ""} ago`;
-  }
-  
+  if (!dateString) return "Unknown date";
+
+  const now = new Date();
+  const then = new Date(dateString);
+  const seconds = Math.floor((now - then) / 1000);
+
+  if (seconds < 5) return "Just now";
+  if (seconds < 60) return `${seconds} seconds ago`;
+
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes} minute${minutes !== 1 ? "s" : ""} ago`;
+
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours} hour${hours !== 1 ? "s" : ""} ago`;
+
+  const days = Math.floor(hours / 24);
+  if (days < 7) return `${days} day${days !== 1 ? "s" : ""} ago`;
+
+  const weeks = Math.floor(days / 7);
+  if (weeks < 4) return `${weeks} week${weeks !== 1 ? "s" : ""} ago`;
+
+  const months = Math.floor(days / 30);
+  if (months < 12) return `${months} month${months !== 1 ? "s" : ""} ago`;
+
+  const years = Math.floor(days / 365);
+  return `${years} year${years !== 1 ? "s" : ""} ago`;
+}
 
 export default function ThreadDetail() {
   const { title: encodedTitle } = useParams();
@@ -51,7 +50,6 @@ export default function ThreadDetail() {
 
   const [editingCommentId, setEditingCommentId] = useState(null);
   const [editCommentText, setEditCommentText] = useState("");
-
 
   // Load comments (and thread info if not passed in)
   useEffect(() => {
@@ -74,7 +72,9 @@ export default function ThreadDetail() {
           setThread(found);
         }
 
-        const resComments = await fetch(`${API_BASE}/comments/${encodeURIComponent(threadTitle)}`);
+        const resComments = await fetch(
+          `${API_BASE}/comments/${encodeURIComponent(threadTitle)}`,
+        );
         const dataComments = await resComments.json();
         setComments(Array.isArray(dataComments) ? dataComments : []);
       } catch (err) {
@@ -101,8 +101,8 @@ export default function ThreadDetail() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           content: newComment.trim(),
-          thread_id: threadTitle,  // backend uses title as thread_id
-          user_id: "demo-user",    // placeholder user
+          thread_id: threadTitle, // backend uses title as thread_id
+          user_id: "demo-user", // placeholder user
         }),
       });
 
@@ -113,7 +113,9 @@ export default function ThreadDetail() {
       setNewComment("");
 
       // reload comments
-      const resComments = await fetch(`${API_BASE}/comments/${encodeURIComponent(threadTitle)}`);
+      const resComments = await fetch(
+        `${API_BASE}/comments/${encodeURIComponent(threadTitle)}`,
+      );
       const dataComments = await resComments.json();
       setComments(Array.isArray(dataComments) ? dataComments : []);
     } catch (err) {
@@ -127,56 +129,59 @@ export default function ThreadDetail() {
     setEditingCommentId(comment.id);
     setEditCommentText(comment.content || "");
   }
-  
+
   function cancelEditComment() {
     setEditingCommentId(null);
     setEditCommentText("");
   }
-  
+
   async function saveEditedComment() {
     if (!editingCommentId) return;
-  
+
     try {
       const res = await fetch(`${API_BASE}/comment/${editingCommentId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ content: editCommentText }),
       });
-  
+
       const updated = await res.json();
       if (!res.ok) throw new Error(updated.error);
-  
+
       // reload comments
-      const resComments = await fetch(`${API_BASE}/comments/${encodeURIComponent(threadTitle)}`);
+      const resComments = await fetch(
+        `${API_BASE}/comments/${encodeURIComponent(threadTitle)}`,
+      );
       setComments(await resComments.json());
-  
+
       setEditingCommentId(null);
       setEditCommentText("");
     } catch (err) {
       setError("Failed to edit comment.");
     }
   }
-  
+
   async function deleteComment(comment) {
     const ok = window.confirm("Delete this comment?");
     if (!ok) return;
-  
+
     try {
       const res = await fetch(`${API_BASE}/comment/${comment.id}`, {
         method: "DELETE",
       });
-  
+
       const updated = await res.json();
       if (!res.ok) throw new Error(updated.error);
-  
+
       // reload comments (soft-deleted now)
-      const resComments = await fetch(`${API_BASE}/comments/${encodeURIComponent(threadTitle)}`);
+      const resComments = await fetch(
+        `${API_BASE}/comments/${encodeURIComponent(threadTitle)}`,
+      );
       setComments(await resComments.json());
     } catch (err) {
       setError("Failed to delete comment.");
     }
   }
-  
 
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100 px-6 py-8">
@@ -202,10 +207,9 @@ export default function ThreadDetail() {
           </p>
           <div className="mt-2">
             <span className="inline-flex items-center rounded-full border border-zinc-700 px-2 py-0.5 text-xs text-zinc-300">
-                {thread.category || "General"}
+              {thread.category || "General"}
             </span>
           </div>
-          
         </section>
       )}
 
@@ -213,91 +217,87 @@ export default function ThreadDetail() {
         <h3 className="text-lg font-semibold mb-3">Comments</h3>
 
         {comments.length === 0 ? (
-        <p className="text-sm text-zinc-400 mb-4">No comments yet. Be the first!</p>
+          <p className="text-sm text-zinc-400 mb-4">
+            No comments yet. Be the first!
+          </p>
         ) : (
-        <div className="space-y-3 mb-4">
+          <div className="space-y-3 mb-4">
             {comments.map((c, idx) => {
-            const isDeleted =
+              const isDeleted =
                 c.deleted || c.content === "Comment has been deleted";
-            const isEditing = editingCommentId === c.id;
-            const created = timeAgo(c.date_created);
+              const isEditing = editingCommentId === c.id;
+              const created = timeAgo(c.date_created);
 
-
-
-            return (
+              return (
                 <div
-                key={c.id || idx}
-                className="rounded-lg border border-zinc-800 bg-zinc-900/80 p-3"
+                  key={c.id || idx}
+                  className="rounded-lg border border-zinc-800 bg-zinc-900/80 p-3"
                 >
-                {/* EDIT MODE */}
-                {isEditing && !isDeleted ? (
+                  {/* EDIT MODE */}
+                  {isEditing && !isDeleted ? (
                     <div className="space-y-2">
-                    <textarea
+                      <textarea
                         value={editCommentText}
                         onChange={(e) => setEditCommentText(e.target.value)}
                         className="w-full rounded-lg bg-zinc-800 border border-zinc-700 px-3 py-2 text-sm"
-                    />
-                    <div className="flex gap-2">
+                      />
+                      <div className="flex gap-2">
                         <button
-                        className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium hover:bg-blue-500"
-                        onClick={saveEditedComment}
+                          className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium hover:bg-blue-500"
+                          onClick={saveEditedComment}
                         >
-                        Save
+                          Save
                         </button>
                         <button
-                        className="rounded-lg bg-zinc-700 px-3 py-1.5 text-xs hover:bg-zinc-600"
-                        onClick={cancelEditComment}
+                          className="rounded-lg bg-zinc-700 px-3 py-1.5 text-xs hover:bg-zinc-600"
+                          onClick={cancelEditComment}
                         >
-                        Cancel
+                          Cancel
                         </button>
+                      </div>
                     </div>
-                    </div>
-                ) : (
-
+                  ) : (
                     <>
-                    {/* NORMAL / DELETED VIEW */}
-                    <p
+                      {/* NORMAL / DELETED VIEW */}
+                      <p
                         className={`text-sm ${
-                        isDeleted ? "text-zinc-500 italic" : "text-zinc-100"
+                          isDeleted ? "text-zinc-500 italic" : "text-zinc-100"
                         }`}
-                    >
+                      >
                         {isDeleted ? "Comment has been deleted" : c.content}
-                    </p>
+                      </p>
 
-                    {/* USER + DATE */}
-                    <div className="flex justify-between mt-1 text-xs text-zinc-500">
+                      {/* USER + DATE */}
+                      <div className="flex justify-between mt-1 text-xs text-zinc-500">
                         <span>By User {c.user_id || "unknown"}</span>
                         <span>{created}</span>
-                    </div>
+                      </div>
                     </>
+                  )}
 
-
-                )}
-
-                {/* ACTION BUTTONS */}
-                {!isDeleted && !isEditing && (
+                  {/* ACTION BUTTONS */}
+                  {!isDeleted && !isEditing && (
                     <div className="mt-2 flex gap-2">
-                    <button
+                      <button
                         className="text-xs rounded-md border border-zinc-700 px-2 py-1 hover:bg-zinc-800"
                         onClick={() => startEditComment(c)}
-                    >
+                      >
                         Edit
-                    </button>
+                      </button>
 
-                    <button
+                      <button
                         className="text-xs rounded-md border border-red-600/60 text-red-300 px-2 py-1 hover:bg-red-900/40"
                         onClick={() => deleteComment(c)}
-                    >
+                      >
                         Delete
-                    </button>
+                      </button>
                     </div>
-                )}
+                  )}
                 </div>
-            );
+              );
             })}
-        </div>
+          </div>
         )}
-
 
         <form onSubmit={handlePostComment} className="space-y-2 max-w-lg">
           <textarea

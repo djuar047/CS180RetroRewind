@@ -1,5 +1,11 @@
 import React from "react";
-import { render, screen, fireEvent, waitFor, act } from "@testing-library/react";
+import {
+  render,
+  screen,
+  fireEvent,
+  waitFor,
+  act,
+} from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import App from "./App.jsx";
 
@@ -49,11 +55,13 @@ describe("App component", () => {
       render(
         <MemoryRouter initialEntries={["/"]}>
           <App auth={mockAuth} setAuth={jest.fn()} />
-        </MemoryRouter>
+        </MemoryRouter>,
       );
     });
 
-    expect(screen.getByText(/Track, Rate, and Relive the Classics/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/Track, Rate, and Relive the Classics/i),
+    ).toBeInTheDocument();
     expect(screen.getByPlaceholderText(/Try 'Halo'/i)).toBeInTheDocument();
   });
 
@@ -62,7 +70,7 @@ describe("App component", () => {
       render(
         <MemoryRouter initialEntries={["/login"]}>
           <App auth={null} setAuth={jest.fn()} />
-        </MemoryRouter>
+        </MemoryRouter>,
       );
     });
 
@@ -74,7 +82,7 @@ describe("App component", () => {
       render(
         <MemoryRouter initialEntries={["/profile"]}>
           <App auth={mockAuth} setAuth={jest.fn()} />
-        </MemoryRouter>
+        </MemoryRouter>,
       );
     });
 
@@ -89,7 +97,7 @@ describe("Home component interactions", () => {
       render(
         <MemoryRouter>
           <App auth={mockAuth} setAuth={jest.fn()} />
-        </MemoryRouter>
+        </MemoryRouter>,
       );
     });
 
@@ -105,7 +113,7 @@ describe("Home component interactions", () => {
       render(
         <MemoryRouter>
           <App auth={mockAuth} setAuth={jest.fn()} />
-        </MemoryRouter>
+        </MemoryRouter>,
       );
     });
 
@@ -114,7 +122,7 @@ describe("Home component interactions", () => {
     fireEvent.submit(screen.getByRole("button", { name: /search/i }));
 
     await waitFor(() =>
-      expect(screen.getByText(/Halo: Combat Evolved/i)).toBeInTheDocument()
+      expect(screen.getByText(/Halo: Combat Evolved/i)).toBeInTheDocument(),
     );
     expect(screen.getByText(/Backend not reachable/i)).toBeInTheDocument();
   });
@@ -124,7 +132,7 @@ describe("Home component interactions", () => {
       render(
         <MemoryRouter>
           <App auth={mockAuth} setAuth={jest.fn()} />
-        </MemoryRouter>
+        </MemoryRouter>,
       );
     });
 

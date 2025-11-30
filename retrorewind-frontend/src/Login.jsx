@@ -13,7 +13,8 @@ export default function Login({ auth, setAuth }) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-zinc-950 text-zinc-100">
         <p className="text-center text-amber-300 mb-4">
-          You are already logged in. Please log out first to log in as another user.
+          You are already logged in. Please log out first to log in as another
+          user.
         </p>
         <button
           onClick={() => setAuth({ userId: null, token: null })}
@@ -27,33 +28,32 @@ export default function Login({ auth, setAuth }) {
 
   // Simple login button just to test the UI for now
   async function handleLogin(e) {
-  e.preventDefault();
-  try {
-    const res = await fetch("http://127.0.0.1:5000/login", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password }),
-    });
+    e.preventDefault();
+    try {
+      const res = await fetch("http://127.0.0.1:5000/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
+      });
 
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || "Login failed");
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Login failed");
 
-    // store userId and token globally
-    setAuth({
-      userId: data.user_id,
-      token: data.auth_token,
-    });
+      // store userId and token globally
+      setAuth({
+        userId: data.user_id,
+        token: data.auth_token,
+      });
 
+      alert(data.message);
 
-    alert(data.message);
-
-    // go to profile screen after login
-    navigate("/");
-  } catch (err) {
-    console.error(err);
-    setMessage(err.message || "Login failed");
+      // go to profile screen after login
+      navigate("/");
+    } catch (err) {
+      console.error(err);
+      setMessage(err.message || "Login failed");
+    }
   }
-}
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-zinc-950 text-zinc-100">

@@ -23,7 +23,10 @@ export default function App({ auth, setAuth }) {
       <Route path="/" element={<Home auth={auth} setAuth={setAuth} />} />
       <Route path="/login" element={<Login auth={auth} setAuth={setAuth} />} />
       <Route path="/profile" element={<Profile auth={auth} />} />
-      <Route path="/createAccount" element={<CreateAccount setAuth={setAuth} />} />
+      <Route
+        path="/createAccount"
+        element={<CreateAccount setAuth={setAuth} />}
+      />
       <Route path="/threads" element={<CommunityThreads />} />
       <Route path="/threads/:title" element={<ThreadDetail />} />
     </Routes>
@@ -77,9 +80,7 @@ function Home({ auth, setAuth }) {
       if (platformFilter.trim()) {
         const p = platformFilter.trim().toLowerCase();
         const arr = Array.isArray(it.platforms) ? it.platforms : [];
-        const hit = arr.some((name) =>
-          (name || "").toLowerCase().includes(p)
-        );
+        const hit = arr.some((name) => (name || "").toLowerCase().includes(p));
         if (!hit) return false;
       }
       return true;
@@ -149,9 +150,9 @@ function Home({ auth, setAuth }) {
       setItems(
         applyFilters(
           MOCK_RESULTS.filter((m) =>
-            m.title.toLowerCase().includes(query.toLowerCase())
-          )
-        )
+            m.title.toLowerCase().includes(query.toLowerCase()),
+          ),
+        ),
       );
     } finally {
       setLoading(false);
@@ -159,43 +160,42 @@ function Home({ auth, setAuth }) {
   }
 
   async function addToLibrary(item) {
-  if (!auth?.userId || !auth?.token) {
-    alert("Please log in to add to your library.");
-    return;
-  }
-
-  try {
-    const res = await fetch(
-      `http://127.0.0.1:5000/profile/${auth.userId}/library/add`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${auth.token}`,
-        },
-        body: JSON.stringify({
-          id: item.id,
-          title: item.title,
-          type: item.type,
-          year: item.year || "",
-          coverUrl: item.coverUrl || "",
-        }),
-      }
-    );
-    const data = await res.json();
-    if (!res.ok) {
-      throw new Error(data.error || "Failed to add to library");
+    if (!auth?.userId || !auth?.token) {
+      alert("Please log in to add to your library.");
+      return;
     }
 
-    // disable button by updating state
-    setLibraryIds((prev) => [...prev, item.id]);
-    alert(`${item.title} added to your library!`);
-  } catch (err) {
-    console.error("Add-to-library error:", err);
-    alert("Failed to add to library.");
-  }
-}
+    try {
+      const res = await fetch(
+        `http://127.0.0.1:5000/profile/${auth.userId}/library/add`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${auth.token}`,
+          },
+          body: JSON.stringify({
+            id: item.id,
+            title: item.title,
+            type: item.type,
+            year: item.year || "",
+            coverUrl: item.coverUrl || "",
+          }),
+        },
+      );
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to add to library");
+      }
 
+      // disable button by updating state
+      setLibraryIds((prev) => [...prev, item.id]);
+      alert(`${item.title} added to your library!`);
+    } catch (err) {
+      console.error("Add-to-library error:", err);
+      alert("Failed to add to library.");
+    }
+  }
 
   async function submitRating() {
     if (!currentGame) return;
@@ -260,7 +260,11 @@ function Home({ auth, setAuth }) {
           {/* Left: logo + title */}
           <div className="flex items-center gap-3">
             <div className="group relative h-9 w-9 rounded-xl overflow-hidden ring-2 ring-amber-400/70 bg-zinc-900 shadow-md shadow-blue-600/20 transition">
-              <img src={bear} alt="Bear 180" className="h-full w-full object-cover" />
+              <img
+                src={bear}
+                alt="Bear 180"
+                className="h-full w-full object-cover"
+              />
               <span className="pointer-events-none absolute inset-0 rounded-xl ring-2 ring-transparent group-hover:ring-blue-600/70 group-hover:shadow-[0_0_18px_4px_rgba(251,191,36,0.35)] transition" />
             </div>
 
@@ -406,11 +410,7 @@ function Home({ auth, setAuth }) {
             </button>
           </div>
 
-          {err && (
-            <p className="mt-3 text-sm text-amber-300">
-              {err}
-            </p>
-          )}
+          {err && <p className="mt-3 text-sm text-amber-300">{err}</p>}
         </section>
 
         {/* results grid */}
@@ -454,40 +454,40 @@ function Home({ auth, setAuth }) {
                     {m.summary}
                   </p>
 
-<div className="mt-4 flex flex-col gap-2">
-  {auth?.userId && (
-    <button
-      className="rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-1.5 text-sm hover:bg-zinc-700"
-      onClick={() => addToLibrary(m)}
-      disabled={libraryIds.includes(m.id)}
-    >
-      Add to Library
-    </button>
-  )}
+                  <div className="mt-4 flex flex-col gap-2">
+                    {auth?.userId && (
+                      <button
+                        className="rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-1.5 text-sm hover:bg-zinc-700"
+                        onClick={() => addToLibrary(m)}
+                        disabled={libraryIds.includes(m.id)}
+                      >
+                        Add to Library
+                      </button>
+                    )}
 
-  {ratings[m.id] && (
-    <div className="mt-1 text-sm text-amber-400">
-      Rated {ratings[m.id].stars} / 5 — "{ratings[m.id].review}"
-    </div>
-  )}
+                    {ratings[m.id] && (
+                      <div className="mt-1 text-sm text-amber-400">
+                        Rated {ratings[m.id].stars} / 5 — "
+                        {ratings[m.id].review}"
+                      </div>
+                    )}
 
-  {auth?.userId && (
-    <div className="mt-1 flex gap-2">
-      <button
-        className="rounded-lg border border-blue-600 bg-blue-600/10 px-3 py-1.5 text-sm text-blue-300"
-        onClick={() => {
-          setCurrentGame(m);
-          setStars(ratings[m.id]?.stars || 0);
-          setReview(ratings[m.id]?.review || "");
-          setShowModal(true);
-        }}
-      >
-        {rated ? "Update Rating" : "Rate ★"}
-      </button>
-    </div>
-  )}
-</div>
-
+                    {auth?.userId && (
+                      <div className="mt-1 flex gap-2">
+                        <button
+                          className="rounded-lg border border-blue-600 bg-blue-600/10 px-3 py-1.5 text-sm text-blue-300"
+                          onClick={() => {
+                            setCurrentGame(m);
+                            setStars(ratings[m.id]?.stars || 0);
+                            setReview(ratings[m.id]?.review || "");
+                            setShowModal(true);
+                          }}
+                        >
+                          {rated ? "Update Rating" : "Rate ★"}
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </article>
             );
@@ -552,4 +552,3 @@ function Home({ auth, setAuth }) {
     </div>
   );
 }
-

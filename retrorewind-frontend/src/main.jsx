@@ -16,5 +16,5 @@ createRoot(document.getElementById("root")).render(
     <BrowserRouter>
       <AppWrapper />
     </BrowserRouter>
-  </StrictMode>
+  </StrictMode>,
 );
