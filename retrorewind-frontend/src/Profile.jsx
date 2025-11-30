@@ -145,6 +145,37 @@ export default function Profile({ auth }) {
     }
   }
 
+  async function removeFromLibrary(itemId) {
+  if (!window.confirm("Remove this item from your library?")) return;
+
+  try {
+    const res = await fetch(
+      `http://127.0.0.1:5000/profile/${userId}/library/${itemId}`,
+      {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      }
+    );
+
+    if (!res.ok) {
+      const data = await res.json();
+      return alert(data.error || "Server error removing item.");
+    }
+
+    // Remove from UI
+    setUser((prev) => ({
+      ...prev,
+      library: (prev?.library || []).filter((i) => i.id !== itemId),
+    }));
+
+    alert("Item removed!");
+  } catch (err) {
+    console.error(err);
+    alert("Server error removing item.");
+  }
+}
+
+
   async function handleUpdate(e) {
     e.preventDefault();
     try {
@@ -279,31 +310,35 @@ export default function Profile({ auth }) {
       </div>
 
       {/* Library Section */}
-      <div className="w-full max-w-md bg-zinc-900 border border-zinc-800 rounded-xl p-6 shadow-md mb-6">
-        <h2 className="text-xl font-semibold text-amber-400 text-center mb-4">
-          My Library
-        </h2>
-        <div className="flex flex-col gap-3">
-          {user.library && user.library.length > 0 ? (
-            user.library.map((item, index) => (
-              <div
-                key={index}
-                className="bg-zinc-800 p-3 rounded-lg border border-zinc-700"
-              >
-                <p className="text-lg font-semibold text-white">
-                  {item.title}
-                </p>
-                <p className="text-sm text-zinc-400">{item.type}</p>
-                <p className="text-sm text-zinc-500">{item.year}</p>
-              </div>
-            ))
-          ) : (
-            <p className="text-center text-zinc-400 mt-2">
-              Your watchlist is empty
-            </p>
-          )}
+<div className="w-full max-w-md bg-zinc-900 border border-zinc-800 rounded-xl p-6 shadow-md mb-6">
+  <h2 className="text-xl font-semibold text-amber-400 text-center mb-4">
+    My Library
+  </h2>
+  <div className="flex flex-col gap-3">
+    {user.library && user.library.length > 0 ? (
+      user.library.map((item, index) => (
+        <div
+          key={index}
+          className="bg-zinc-800 p-3 rounded-lg border border-zinc-700 flex justify-between items-center"
+        >
+          <div>
+            <p className="text-lg font-semibold text-white">{item.title}</p>
+            <p className="text-sm text-zinc-400">{item.type}</p>
+            <p className="text-sm text-zinc-500">{item.year}</p>
+          </div>
+          <button
+            onClick={() => removeFromLibrary(item.id)}
+            className="ml-4 text-red-400 hover:text-red-300 text-sm px-2 py-1 border border-red-400 rounded"
+          >
+            Remove
+          </button>
         </div>
-      </div>
+      ))
+    ) : (
+      <p className="text-center text-zinc-400 mt-2">Your watchlist is empty</p>
+    )}
+  </div>
+</div>
 
       {/* Ratings Section */}
       <div className="w-full max-w-md bg-zinc-900 border border-zinc-800 rounded-xl p-6 shadow-md">
