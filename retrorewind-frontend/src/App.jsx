@@ -454,36 +454,40 @@ function Home({ auth, setAuth }) {
                     {m.summary}
                   </p>
 
-                  <div className="mt-4 flex flex-col gap-2">
-                    <button
-  className="rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-1.5 text-sm hover:bg-zinc-700 disabled:opacity-50 disabled:cursor-not-allowed"
-  onClick={() => addToLibrary(m)}
-  disabled={libraryIds.includes(m.id)}
->
-  Add to Library
-</button>
+<div className="mt-4 flex flex-col gap-2">
+  {auth?.userId && (
+    <button
+      className="rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-1.5 text-sm hover:bg-zinc-700"
+      onClick={() => addToLibrary(m)}
+      disabled={libraryIds.includes(m.id)}
+    >
+      Add to Library
+    </button>
+  )}
 
+  {ratings[m.id] && (
+    <div className="mt-1 text-sm text-amber-400">
+      Rated {ratings[m.id].stars} / 5 — "{ratings[m.id].review}"
+    </div>
+  )}
 
-                    {ratings[m.id] && (
-                      <div className="mt-1 text-sm text-amber-400">
-                        Rated {ratings[m.id].stars} / 5 — "{ratings[m.id].review}"
-                      </div>
-                    )}
+  {auth?.userId && (
+    <div className="mt-1 flex gap-2">
+      <button
+        className="rounded-lg border border-blue-600 bg-blue-600/10 px-3 py-1.5 text-sm text-blue-300"
+        onClick={() => {
+          setCurrentGame(m);
+          setStars(ratings[m.id]?.stars || 0);
+          setReview(ratings[m.id]?.review || "");
+          setShowModal(true);
+        }}
+      >
+        {rated ? "Update Rating" : "Rate ★"}
+      </button>
+    </div>
+  )}
+</div>
 
-                    <div className="mt-1 flex gap-2">
-                      <button
-                        className="rounded-lg border border-blue-600 bg-blue-600/10 px-3 py-1.5 text-sm text-blue-300"
-                        onClick={() => {
-                          setCurrentGame(m);
-                          setStars(ratings[m.id]?.stars || 0);
-                          setReview(ratings[m.id]?.review || "");
-                          setShowModal(true);
-                        }}
-                      >
-                        {rated ? "Update Rating" : "Rate ★"}
-                      </button>
-                    </div>
-                  </div>
                 </div>
               </article>
             );

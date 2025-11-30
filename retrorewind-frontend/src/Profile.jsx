@@ -308,6 +308,7 @@ export default function Profile({ auth }) {
           )}
         </div>
       </div>
+<div className="w-full max-w-6xl flex flex-col lg:flex-row gap-6 justify-center mx-auto">
 
       {/* Library Section */}
 <div className="w-full max-w-md bg-zinc-900 border border-zinc-800 rounded-xl p-6 shadow-md mb-6">
@@ -391,6 +392,7 @@ export default function Profile({ auth }) {
           )}
         </div>
       </div>
+    </div>
     </div>
   );
 }
