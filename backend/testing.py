@@ -1,7 +1,19 @@
 import requests
 from pprint import pprint
+from bson import ObjectId
+import uuid
+from pymongo import MongoClient
+import os
 
 BASE = "http://127.0.0.1:5000"
+
+# Mongo setup for cleanup
+MONGO_URI = os.getenv("MONGO_URI", "mongodb://localhost:27017")
+client = MongoClient(MONGO_URI)
+db = client["retro_rewind"]
+
+def unique_email():
+    return f"tester_{uuid.uuid4().hex[:8]}@mail.com"
 
 def test_health():
     r = requests.get(f"{BASE}/")
@@ -9,22 +21,22 @@ def test_health():
     assert r.json().get("ok") == True
     print("Health check passed.")
 
-def test_register():
+def test_register(email=None):
     user_data = {
         "username": "tester_edge",
-        "email": "tester_edge@mail.com",
+        "email": email or unique_email(),
         "password": "pass1234"
     }
     r = requests.post(f"{BASE}/register", json=user_data)
     assert r.status_code == 201
     user_id = r.json()["user_id"]
     print("Register passed.")
-    return user_id
+    return user_id, user_data["email"]
 
-def test_register_duplicate():
+def test_register_duplicate(email):
     user_data = {
         "username": "tester_edge",
-        "email": "tester_edge@mail.com",
+        "email": email,
         "password": "pass1234"
     }
     r = requests.post(f"{BASE}/register", json=user_data)
@@ -64,7 +76,8 @@ def test_profile_get(user_id):
     print("Profile GET passed.")
 
 def test_profile_get_invalid():
-    r = requests.get(f"{BASE}/profile/invalid_id")
+    fake_id = str(ObjectId())
+    r = requests.get(f"{BASE}/profile/{fake_id}")
     assert r.status_code == 404
     print("Profile GET invalid ID check passed.")
 
@@ -92,8 +105,8 @@ def test_library_get(user_id):
     pprint(r.json())
     print("Library GET passed.")
 
-def test_library_delete(user_id):
-    r = requests.delete(f"{BASE}/profile/{user_id}/library/999")
+def test_library_delete(user_id, item_id="999"):
+    r = requests.delete(f"{BASE}/profile/{user_id}/library/{item_id}")
     assert r.status_code == 200
     print("Library delete passed.")
 
@@ -166,12 +179,19 @@ def test_movies_empty():
     assert r.json() == []
     print("Movies empty query check passed.")
 
+def cleanup(user_email, user_id):
+    # Remove ratings
+    db["ratings"].delete_many({"user_id": ObjectId(user_id)})
+    # Remove user
+    db["users"].delete_one({"_id": ObjectId(user_id)})
+    print("Cleanup complete.")
+
 def run_all_tests():
     test_health()
     test_register_missing_fields()
-    user_id = test_register()
-    test_register_duplicate()
-    token, user_id = test_login("tester_edge@mail.com", "pass1234")
+    user_id, email = test_register()
+    test_register_duplicate(email)
+    token, user_id = test_login(email, "pass1234")
     test_login_invalid()
     test_login_missing_fields()
     test_profile_get(user_id)
@@ -193,7 +213,8 @@ def run_all_tests():
     test_search_empty()
     test_movies()
     test_movies_empty()
-    print("All edge case tests passed successfully.")
+    cleanup(email, user_id)
+    print("\nAll edge case tests passed successfully.")
 
 if __name__ == "__main__":
     run_all_tests()
