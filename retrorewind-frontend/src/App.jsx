@@ -46,6 +46,7 @@ function Home({ auth, setAuth }) {
   const [stars, setStars] = useState(0);
   const [review, setReview] = useState("");
   const [ratings, setRatings] = useState({}); // { mediaId: { stars, review } }
+  const [libraryIds, setLibraryIds] = useState([]);
 
   // filters
   const [typeFilter, setTypeFilter] = useState("All");
@@ -158,39 +159,43 @@ function Home({ auth, setAuth }) {
   }
 
   async function addToLibrary(item) {
-    if (!auth?.userId || !auth?.token) {
-      alert("Please log in to add to your library.");
-      return;
+  if (!auth?.userId || !auth?.token) {
+    alert("Please log in to add to your library.");
+    return;
+  }
+
+  try {
+    const res = await fetch(
+      `http://127.0.0.1:5000/profile/${auth.userId}/library/add`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${auth.token}`,
+        },
+        body: JSON.stringify({
+          id: item.id,
+          title: item.title,
+          type: item.type,
+          year: item.year || "",
+          coverUrl: item.coverUrl || "",
+        }),
+      }
+    );
+    const data = await res.json();
+    if (!res.ok) {
+      throw new Error(data.error || "Failed to add to library");
     }
 
-    try {
-      const res = await fetch(
-        `http://127.0.0.1:5000/profile/${auth.userId}/library/add`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${auth.token}`,
-          },
-          body: JSON.stringify({
-            id: item.id,
-            title: item.title,
-            type: item.type,
-            year: item.year || "",
-            coverUrl: item.coverUrl || "",
-          }),
-        }
-      );
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || "Failed to add to library");
-      }
-      alert(`${item.title} added to your library!`);
-    } catch (err) {
-      console.error("Add-to-library error:", err);
-      alert("Failed to add to library.");
-    }
+    // disable button by updating state
+    setLibraryIds((prev) => [...prev, item.id]);
+    alert(`${item.title} added to your library!`);
+  } catch (err) {
+    console.error("Add-to-library error:", err);
+    alert("Failed to add to library.");
   }
+}
+
 
   async function submitRating() {
     if (!currentGame) return;
@@ -451,11 +456,13 @@ function Home({ auth, setAuth }) {
 
                   <div className="mt-4 flex flex-col gap-2">
                     <button
-                      className="rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-1.5 text-sm hover:bg-zinc-700"
-                      onClick={() => addToLibrary(m)}
-                    >
-                      Add to Library
-                    </button>
+  className="rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-1.5 text-sm hover:bg-zinc-700 disabled:opacity-50 disabled:cursor-not-allowed"
+  onClick={() => addToLibrary(m)}
+  disabled={libraryIds.includes(m.id)}
+>
+  Add to Library
+</button>
+
 
                     {ratings[m.id] && (
                       <div className="mt-1 text-sm text-amber-400">
