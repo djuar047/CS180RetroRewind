@@ -33,7 +33,7 @@ if not SECONDARY_DB_URI:
     raise RuntimeError("Set SECONDARY_DB_URI in .env")
 
 secondary_client = MongoClient(SECONDARY_DB_URI)
-secondary_db = secondary_client["analytics_db"]  # or whatever DB you want
+secondary_db = secondary_client["analytics_db"]  # secondary DB for login history
 
 CLIENT_ID = os.getenv("CLIENT_ID")
 CLIENT_SECRET = os.getenv("CLIENT_SECRET")
@@ -45,17 +45,9 @@ if not CLIENT_ID or not CLIENT_SECRET:
 app = Flask(__name__)
 CORS(
     app,
-    resources={
-        r"/*": {
-            "origins": [
-                "http://localhost:5173",
-                "http://127.0.0.1:5173",
-            ]
-        }
-    },
+    resources={r"/*": {"origins": ["http://localhost:5173", "http://127.0.0.1:5173"]}},
 )
 
-# Blueprints
 app.register_blueprint(thread_bp)
 app.register_blueprint(comment_bp)
 app.register_blueprint(auth_blueprint, url_prefix="/auth")
@@ -63,8 +55,103 @@ app.register_blueprint(auth_blueprint, url_prefix="/auth")
 # Token cache for IGDB
 _token_cache = {"value": None, "expires_at": 0}
 
-# ---------- AUTH / USERS / PROFILE ----------
+# register the authorization routes
+app.register_blueprint(auth_blueprint, url_prefix="/auth")
 
+import bcrypt
+
+
+# --------------------------------------------------
+#  FIREBASE → MONGO LINK ENDPOINT
+#  This is how we "copy the Firebase uid to MongoDB"
+# --------------------------------------------------
+@app.post("/auth/link-mongo")
+def link_mongo_user():
+    """
+    Frontend sends:
+    {
+      "id_token": "<firebase idToken>",
+      "username": "optional display name"
+    }
+
+    We:
+    - verify token with Firebase
+    - get uid + email
+    - upsert a Mongo user with firebase_uid
+    - log login to secondary_db
+    - return mongo_user_id so frontend can use it for ratings
+    """
+    data = request.json or {}
+    id_token = data.get("id_token")
+
+    if not id_token:
+        return jsonify({"error": "missing_id_token"}), 400
+
+    decoded = verify_token(id_token)
+    if not decoded:
+        return jsonify({"error": "invalid_or_expired_token"}), 401
+
+    firebase_uid = decoded.get("uid")
+    email = decoded.get("email")
+    provided_username = data.get("username")
+
+    # simple default username if none given
+    if provided_username:
+        username = provided_username
+    elif email:
+        username = email.split("@")[0]
+    else:
+        username = f"user_{firebase_uid[:6]}"
+
+    # look for an existing Mongo user with this Firebase UID
+    existing = db["users"].find_one({"firebase_uid": firebase_uid})
+
+    if existing:
+        mongo_id = existing["_id"]
+        # keep username/email fresh
+        db["users"].update_one(
+            {"_id": mongo_id},
+            {"$set": {"username": username, "email": email}},
+        )
+    else:
+        mongo_id = ObjectId()
+        db["users"].insert_one(
+            {
+                "_id": mongo_id,
+                "firebase_uid": firebase_uid,
+                "username": username,
+                "email": email,
+                "profile": {
+                    "bio": "",
+                    "avatar_url": "",
+                    "wishlist": [],
+                    "library": [],
+                },
+            }
+        )
+
+    # log login similar to the regular /login route
+    secondary_db["login_history"].insert_one(
+        {
+            "user_id": str(mongo_id),
+            "firebase_uid": firebase_uid,
+            "username": username,
+            "email": email,
+            "login_time": datetime.utcnow(),
+        }
+    )
+
+    return jsonify(
+        {
+            "mongo_user_id": str(mongo_id),
+            "firebase_uid": firebase_uid,
+            "email": email,
+            "username": username,
+        }
+    ), 200
+
+
+# ------------------ REGISTER / LOGIN (HASHED PASSWORDS) ------------------ #
 @app.post("/register")
 def register():
     data = request.json or {}
@@ -89,7 +176,7 @@ def register():
             "_id": ObjectId(user.user_id),
             "username": user.username,
             "email": user.email,
-            "password": hashed_pw.decode("utf-8"),
+            "password": hashed_pw.decode("utf-8"),  # save as string
             "profile": {
                 "bio": user.profile.bio,
                 "avatar_url": user.profile.avatar_url,
@@ -135,10 +222,15 @@ def login():
     )
 
     return jsonify(
-        {"message": "Login successful", "auth_token": token, "user_id": str(user_doc["_id"])}
+        {
+            "message": "Login successful",
+            "auth_token": token,
+            "user_id": str(user_doc["_id"]),
+        }
     )
 
 
+# ------------------ PROFILE ROUTES ------------------ #
 @app.get("/profile/<user_id>")
 def get_profile(user_id):
     user_doc = db["users"].find_one({"_id": ObjectId(user_id)})
@@ -209,7 +301,8 @@ def add_to_library(user_id):
 
     # Push to library
     result = db["users"].update_one(
-        {"_id": ObjectId(user_id)}, {"$push": {"profile.library": media}}
+        {"_id": ObjectId(user_id)},
+        {"$push": {"profile.library": media}},
     )
 
     if result.modified_count == 0:
@@ -218,7 +311,7 @@ def add_to_library(user_id):
     return jsonify({"message": "Added to watchlist", "item": media})
 
 
-@app.get("/profile/<user_id>/library")
+@app.route("/profile/<user_id>/library", methods=["GET"])
 def get_library(user_id):
     user_doc = db["users"].find_one(
         {"_id": ObjectId(user_id)}, {"_id": 0, "profile.library": 1}
@@ -230,35 +323,12 @@ def get_library(user_id):
 
 @app.get("/profile/<user_id>/ratings")
 def get_user_ratings(user_id):
-    # Convert string → ObjectId if valid
-    try:
-        uid = ObjectId(user_id)
-    except Exception:
-        uid = user_id  # fallback for non-ObjectId IDs
-
-    ratings = list(db["ratings"].find({"user_id": uid}))
-
-    fixed = []
-    for r in ratings:
-        fixed.append(
-            {
-                "rating_id": str(r["_id"]),
-                "media_id": str(r["media_id"]),
-                "title": r.get("title", ""),
-                "cover_url": r.get("cover_url", ""),
-                "type": r.get("type", ""),
-                "year": r.get("year", ""),
-                "stars": r.get("stars"),
-                "review_text": r.get("review_text", ""),
-                "date_created": r.get("date_created"),
-            }
-        )
-
-    return jsonify(fixed), 200
-
+    ratings = list(db["ratings"].find({"user_id": user_id}, {"_id": 0}))
+    return jsonify(ratings), 200
 
 # ---------- IGDB / OMDB SEARCH ----------
 
+# ------------------ IGDB / OMDb HELPERS ------------------ #
 def get_access_token() -> str:
     now = time.time()
     if _token_cache["value"] and _token_cache["expires_at"] > now + 60:
@@ -355,9 +425,11 @@ def omdb_search_movies(query: str):
                 "year": m.get("Year"),
                 "platforms": ["Theaters", "Streaming"],
                 "summary": "No summary available.",
-                "coverUrl": m.get("Poster")
-                if m.get("Poster") != "N/A"
-                else "https://placehold.co/200x280?text=No+Cover",
+                "coverUrl": (
+                    m.get("Poster")
+                    if m.get("Poster") != "N/A"
+                    else "https://placehold.co/200x280?text=No+Cover"
+                ),
                 "type": "Movie",
             }
         )
@@ -376,13 +448,12 @@ def movies():
         return jsonify({"error": "server_error", "detail": str(e)}), 500
 
 
-# ---------- RATINGS ----------
-
+# ------------------ RATINGS ROUTES ------------------ #
 @app.post("/ratings")
 def submit_rating():
-    data = request.json or {}
-    user_id = data.get("user_id")
-    media_id = str(data.get("media_id"))
+    data = request.json
+    user_id = data.get("user_id")  # this should be mongo_user_id from /auth/link-mongo
+    media_id = data.get("media_id")
     stars = data.get("stars")
     review_text = data.get("review_text", "")
     if not all([user_id, media_id, stars]):
