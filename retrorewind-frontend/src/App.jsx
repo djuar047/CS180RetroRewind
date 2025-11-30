@@ -1,19 +1,26 @@
 import { useState } from "react";
+import { useEffect } from "react";
 import bear from "./assets/bear.webp";
 // NEW: allow in-app links + route definitions
 import { Routes, Route, Link } from "react-router-dom";
-// NEW: simple pages
+
+import bear from "./assets/bear.webp";
 import Login from "./Login.jsx";
 import Profile from "./Profile.jsx";
 import CreateAccount from "./CreateAccount.jsx";
-
+import CommunityThreads from "./pages/CommunityThreads.jsx";
+import ThreadDetail from "./pages/ThreadDetail.jsx";
 
 /**
  * App: tiny router shell that swaps pages.
- * - "/"       -> Home (our existing screen)
- * - "/login"  -> Login
- * - "/profile"-> Profile
+ * - "/"             -> Home
+ * - "/login"        -> Login
+ * - "/profile"      -> Profile
+ * - "/createAccount"-> Create account
+ * - "/threads"      -> Community threads list
+ * - "/threads/:title" -> Single thread detail
  */
+
 export default function App({ auth, setAuth }) {
   return (
     <Routes>
@@ -21,68 +28,80 @@ export default function App({ auth, setAuth }) {
       <Route path="/login" element={<Login auth={auth} setAuth={setAuth} />} />
       <Route path="/profile" element={<Profile auth={auth} />} />
       <Route path="/createAccount" element={<CreateAccount setAuth={setAuth} />} />
+      <Route path="/threads" element={<CommunityThreads />} />
+      <Route path="/threads/:title" element={<ThreadDetail />} />
     </Routes>
   );
 }
 
 /**
- * Home: this is your original App UI.
+ * Home: search UI + filters + rating modal.
  */
 function Home({ auth, setAuth }) {
-  // q = what the user typed in the search box
+  // search
   const [q, setQ] = useState("");
-  // items = list of results we show in the UI (from backend or mock)
   const [items, setItems] = useState([]);
-  // loading = show “Searching…” on the button so user knows we’re working
   const [loading, setLoading] = useState(false);
-  // err = simple message to tell user if backend isn’t reachable
   const [err, setErr] = useState("");
-  // display ratings in the game cards ratings
+
+  // ratings
   const [showModal, setShowModal] = useState(false);
   const [currentGame, setCurrentGame] = useState(null);
   const [stars, setStars] = useState(0);
   const [review, setReview] = useState("");
+  const [library, setLibrary] = useState([]); // IDs of items in the user's library
+  const [ratings, setRatings] = useState({}); // { mediaId: { stars, review } }
 
-  // for displaying ratings in the UI (local only)
-  const [ratings, setRatings] = useState({});
-
-  // --- NEW: simple search filters that user can change ---
-  const [typeFilter, setTypeFilter] = useState("All");   // shows all by default, or pick “Game” or “Movie”
-  const [yearFrom, setYearFrom] = useState("");          // the earliest year to show
-  const [yearTo, setYearTo] = useState("");              // the latest year to show
-  const [platformFilter, setPlatformFilter] = useState(""); // find results that match this platform (ex: “Xbox”)
-  // ---------------------------
-
-  // --- NEW: filter helper (used to narrow down the search results) ---
+  // filters
+  const [typeFilter, setTypeFilter] = useState("All");
+  const [yearFrom, setYearFrom] = useState("");
+  const [yearTo, setYearTo] = useState("");
+  const [platformFilter, setPlatformFilter] = useState("");
   function applyFilters(list) {
     const yf = parseInt(yearFrom, 10);
     const yt = parseInt(yearTo, 10);
 
     return (list || []).filter((it) => {
-      // filter by type (Game / Movie)
+      // filter by type
       if (typeFilter !== "All") {
-        if ((it.type || "").toLowerCase() !== typeFilter.toLowerCase()) return false;
+        if ((it.type || "").toLowerCase() !== typeFilter.toLowerCase()) {
+          return false;
+        }
       }
-      // filter by year range if given(read first 4 chars)
+
+      // year range
       if ((yearFrom || yearTo) && it.year && it.year !== "—") {
         const y = parseInt(String(it.year).slice(0, 4), 10);
         if (Number.isInteger(yf) && y < yf) return false;
         if (Number.isInteger(yt) && y > yt) return false;
       }
-      // filter by platform (checks if platform name includes the search text)
+
+      // platform filter
       if (platformFilter.trim()) {
         const p = platformFilter.trim().toLowerCase();
         const arr = Array.isArray(it.platforms) ? it.platforms : [];
-        const hit = arr.some((name) => (name || "").toLowerCase().includes(p));
+        const hit = arr.some((name) =>
+          (name || "").toLowerCase().includes(p)
+        );
         if (!hit) return false;
       }
       return true;
     });
   }
-  // --------------------------------------------------
 
-  // MOCK data to show something if the backend isn't running.
-  // (Only used as a fallback inside the catch block.)
+  function reapplyFilters() {
+    setItems((prev) => applyFilters(prev));
+  }
+
+  function resetFilters() {
+    setTypeFilter("All");
+    setYearFrom("");
+    setYearTo("");
+    setPlatformFilter("");
+    setItems((prev) => applyFilters(prev));
+  }
+
+  // fallback sample data
   const MOCK_RESULTS = [
     {
       id: "1",
@@ -106,6 +125,7 @@ function Home({ auth, setAuth }) {
     },
   ];
 
+
   function resetFilters() {
     setTypeFilter("All");
     setYearFrom("");
@@ -119,57 +139,30 @@ function Home({ auth, setAuth }) {
   // - if box is empty, clear results
   // - otherwise, call our Flask API (/search?q=...)
   // - if backend fails, show a small warning + filter MOCK results as a fallback
-async function onSearch(e) {
-  e.preventDefault();
-  const query = q.trim();
-
-  setLoading(true);
-  setErr("");
-
-  try {
-    let results = [];
-
+  // search handler
+  async function onSearch(e) {
+    e.preventDefault();
+    const query = q.trim();
     if (!query) {
-      // No search query → show top 20 highest-rated items
-      const [gamesRes, moviesRes] = await Promise.all([
-        fetch(`http://127.0.0.1:5000/search?q=`), // could fetch all or use a special endpoint
-        fetch(`http://127.0.0.1:5000/movies?q=`),
-      ]);
-      const games = (await gamesRes.json()) || [];
-      const movies = (await moviesRes.json()) || [];
-      results = [...games, ...movies];
-
-      // Sort by rating from your ratings state (descending)
-      results.sort((a, b) => {
-        const ra = ratings[a.id]?.stars || 0;
-        const rb = ratings[b.id]?.stars || 0;
-        return rb - ra;
-      });
-
-      // Take top 20
-      results = results.slice(0, 20);
-
-      setItems(results);
+      setItems([]);
+      setErr("");
       return;
     }
 
-    // If query exists → normal search
-    const [gamesRes, moviesRes] = await Promise.all([
-      fetch(`http://127.0.0.1:5000/search?q=${encodeURIComponent(query)}`),
-      fetch(`http://127.0.0.1:5000/movies?q=${encodeURIComponent(query)}`),
-    ]);
-    const games = (await gamesRes.json()) || [];
-    const movies = (await moviesRes.json()) || [];
-    setItems(applyFilters([...games, ...movies])); // merge + filter
-  } catch (e) {
-    // fallback to mock data
-    setErr("Backend not reachable — showing sample results.");
+    setLoading(true);
+    setErr("");
 
-    if (!query) {
-      setItems(
-        MOCK_RESULTS.sort((a, b) => (ratings[b.id]?.stars || 0) - (ratings[a.id]?.stars || 0)).slice(0, 20)
-      );
-    } else {
+    try {
+      const [gamesRes, moviesRes] = await Promise.all([
+        fetch(`http://127.0.0.1:5000/search?q=${encodeURIComponent(query)}`),
+        fetch(`http://127.0.0.1:5000/movies?q=${encodeURIComponent(query)}`),
+      ]);
+      const games = (await gamesRes.json()) || [];
+      const movies = (await moviesRes.json()) || [];
+      setItems(applyFilters([...games, ...movies]));
+    } catch (e) {
+      // backend not running → fallback
+      setErr("Backend not reachable — showing sample results.");
       setItems(
         applyFilters(
           MOCK_RESULTS.filter((m) =>
@@ -177,71 +170,89 @@ async function onSearch(e) {
           )
         )
       );
+    } finally {
+      setLoading(false);
     }
-  } finally {
-    setLoading(false);
-  }
-}
-
-  // --- NEW: apply filters again without re-searching ---
-  function reapplyFilters() {
-    setItems((prev) => applyFilters(prev));
-  }
-  // -----------------------------------------------------
-async function addToLibrary(item) {
-  if (!auth?.userId || !auth?.token) {
-    alert("Log in first!");
-    return;
   }
 
-  try {
-    const res = await fetch(
-      `http://127.0.0.1:5000/profile/${auth.userId}/library/add`,
-      {
+  async function addToLibrary(item) {
+    if (!auth?.userId || !auth?.token) {
+      alert("Please log in to add to your library.");
+      return;
+    }
+
+    try {
+      const res = await fetch(
+        `http://127.0.0.1:5000/profile/${auth.userId}/library/add`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${auth.token}`,
+          },
+          body: JSON.stringify({
+            id: item.id,
+            title: item.title,
+            type: item.type,
+            year: item.year || "",
+            coverUrl: item.coverUrl || "",
+          }),
+        }
+      );
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to add to library");
+      }
+      alert(`${item.title} added to your library!`);
+    } catch (err) {
+      console.error("Add-to-library error:", err);
+      alert("Failed to add to library.");
+    }
+
+    alert(`${item.title} added to your library!`);
+    setLibrary(prev => [...prev, item.id]); // add to library state
+  } catch (e) {
+    console.error("Add-to-library error:", e);
+    alert("Failed to add to library.");
+  }
+
+  async function submitRating() {
+    if (!currentGame) return;
+    if (!stars) {
+      alert("Please select a star rating first.");
+      return;
+    }
+    if (!auth?.userId || !auth?.token) {
+      alert("Please log in to rate items.");
+      return;
+    }
+
+    try {
+      const res = await fetch("http://127.0.0.1:5000/ratings", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${auth.token}`,
         },
         body: JSON.stringify({
-          id: item.id,
-          title: item.title,
-          type: item.type,
-          year: item.year || "",
-          coverUrl: item.coverUrl || "",
-        }),
-      }
-    );
-
-    const data = await res.json();
-    if (!res.ok) {
-      throw new Error(data.error || "Failed to add to library");
-    }
-
-    alert(`${item.title} added to your library!`);
-  } catch (e) {
-    console.error("Add-to-library error:", e);
-    alert("Failed to add to library.");
-  }
-}
-
-  // Ratings 
-  async function submitRating() {
-    if (!stars) return alert("Please select a star rating first.");
-    try {
-      const res = await fetch("http://127.0.0.1:5000/ratings", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          user_id: "1",
+          user_id: auth.userId,
           media_id: currentGame.id,
+          title: currentGame.title,
+          cover_url: currentGame.coverUrl,
+          type: currentGame.type,
+          year: currentGame.year,
           stars,
           review_text: review,
         }),
       });
-      if (!res.ok) throw new Error(await res.text());
-      const data = await res.json();
-      alert("Thanks for rating!");
+
+      if (!res.ok) {
+        const msg = await res.text();
+        console.error("Rating submit error:", msg);
+        alert("Failed to submit rating.\n\nServer says: " + msg);
+        return;
+      }
+
       setRatings((prev) => ({
         ...prev,
         [currentGame.id]: { stars, review },
@@ -250,99 +261,105 @@ async function addToLibrary(item) {
       setStars(0);
       setReview("");
     } catch (e) {
+      console.error(e);
       alert("Failed to submit rating.");
     }
+  }
+}
+
+
+  // logout helper
+  function handleLogout() {
+    setAuth({ userId: null, token: null });
   }
 
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100">
-      {/* Top bar with logo + app name */}
+      {/* Top bar */}
       <header className="border-b border-zinc-800 bg-gradient-to-r from-blue-600/15 via-zinc-950 to-amber-400/15">
-  <div className="mx-auto max-w-6xl px-4 py-4 flex items-center justify-between">
-    <div className="flex items-center gap-3">
-      {/* Little bear icon */}
-      <div className="group relative h-9 w-9 rounded-xl overflow-hidden ring-2 ring-amber-400/70 bg-zinc-900 shadow-md shadow-blue-600/20 transition">
-        <img src={bear} alt="Bear 180" className="h-full w-full object-cover" />
-        <span className="pointer-events-none absolute inset-0 rounded-xl ring-2 ring-transparent group-hover:ring-blue-600/70 group-hover:shadow-[0_0_18px_4px_rgba(251,191,36,0.35)] transition" />
-      </div>
+        <div className="mx-auto max-w-6xl px-4 py-4 flex items-center justify-between">
+          {/* Left: logo + title */}
+          <div className="flex items-center gap-3">
+            <div className="group relative h-9 w-9 rounded-xl overflow-hidden ring-2 ring-amber-400/70 bg-zinc-900 shadow-md shadow-blue-600/20 transition">
+              <img src={bear} alt="Bear 180" className="h-full w-full object-cover" />
+              <span className="pointer-events-none absolute inset-0 rounded-xl ring-2 ring-transparent group-hover:ring-blue-600/70 group-hover:shadow-[0_0_18px_4px_rgba(251,191,36,0.35)] transition" />
+            </div>
 
-      {/* Title as a link to home */}
-      <button
-  onClick={() => {
-    resetFilters(); // reset all filters
-    setQ("");       // clear search input
-    setItems([]);   // clear displayed results
-  }}
-  className="text-2xl font-extrabold tracking-tight cursor-pointer bg-gradient-to-r from-blue-600 to-amber-400 bg-clip-text text-transparent drop-shadow-[0_0_10px_rgba(37,99,235,0.25)]"
->
-  RetroRewind
-</button>
+            <div className="text-2xl font-extrabold tracking-tight">
+              <span className="bg-gradient-to-r from-blue-600 to-amber-400 bg-clip-text text-transparent drop-shadow-[0_0_10px_rgba(37,99,235,0.25)]">
+                RetroRewind
+              </span>
+            </div>
+          </div>
 
-      </div>
-          {/* Right side: keep team tag + add nav buttons */}
+          {/* Right: team tag + nav */}
           <div className="flex items-center gap-3">
             <span className="text-xs font-medium text-zinc-400">
               Team <span className="text-amber-400">Bear 180</span>
             </span>
-            {/* NEW: go to create account */}
-              {!auth.userId && (
-    <>
-      {/* Create Account */}
-      <Link
-        to="/createAccount"
-        className="rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm font-medium hover:bg-zinc-700 transition"
-      >
-        Create Account
-      </Link>
 
-      {/* Login */}
-      <Link
-        to="/login"
-        className="rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm font-medium hover:bg-zinc-700 transition"
-      >
-        Login
-      </Link>
-    </>
-  )}
+            {/* Community Threads */}
+            <Link
+              to="/threads"
+              className="text-sm rounded-lg border border-zinc-700 bg-zinc-900/70 px-3 py-1.5 
+                         text-zinc-200 hover:bg-zinc-800 hover:border-amber-400/70 transition"
+            >
+              Community Threads
+            </Link>
 
-            {/* NEW: go to profile */}
+            {/* Auth buttons */}
+            {!auth?.userId && (
+              <>
+                <Link
+                  to="/createAccount"
+                  className="rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm font-medium hover:bg-zinc-700 transition"
+                >
+                  Create Account
+                </Link>
+                <Link
+                  to="/login"
+                  className="rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm font-medium hover:bg-zinc-700 transition"
+                >
+                  Login
+                </Link>
+              </>
+            )}
+
             <Link
               to="/profile"
               className="rounded-lg border border-blue-600 bg-blue-600/10 px-3 py-2 text-sm font-medium text-blue-300 hover:bg-blue-600/20 transition"
             >
               Profile
             </Link>
-            {auth.userId && (
-    <button
-      onClick={() => setAuth({ userId: null, token: null })}
-      className="bg-red-600 hover:bg-red-500 px-4 py-2 rounded-lg text-white"
-    >
-      Log Out
-    </button>
-  )}
+
+            {auth?.userId && (
+              <button
+                onClick={handleLogout}
+                className="rounded-lg bg-red-600 px-3 py-2 text-sm font-medium hover:bg-red-500 transition"
+              >
+                Log Out
+              </button>
+            )}
           </div>
         </div>
-        
       </header>
 
+      {/* Main content */}
       <main className="mx-auto max-w-6xl px-4 py-8">
-        {/* Section with the title + search box */}
         <section className="mb-8">
           <h2 className="text-3xl font-bold text-zinc-100">
             Track, Rate, and Relive the Classics
           </h2>
-          <p className="mt-1 text-zinc-400">-Games and Movies-</p>
+          <p className="mt-1 text-zinc-400">Games and Movies</p>
 
-          {/* form: on submit calls onSearch() */}
+          {/* search form */}
           <form onSubmit={onSearch} className="mt-5 flex gap-2">
-            {/* user types here */}
             <input
               value={q}
               onChange={(e) => setQ(e.target.value)}
               placeholder="Try 'Halo', 'Chrono Trigger'…"
               className="w-full rounded-xl bg-zinc-900/70 border border-zinc-800 px-4 py-3 outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-600/30"
             />
-            {/* button shows “Searching…” while loading */}
             <button
               type="submit"
               disabled={loading}
@@ -352,21 +369,18 @@ async function addToLibrary(item) {
             </button>
           </form>
 
-          {/* --- NEW: quick filter controls shown under the search bar --- */}
-          <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
-            {/* dropdown to choose type (shows all by default) */}
+          {/* filters */}
+          <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-6">
             <select
               value={typeFilter}
               onChange={(e) => setTypeFilter(e.target.value)}
               className="rounded-xl bg-zinc-900/70 border border-zinc-800 px-3 py-2"
-              title="Type"
             >
               <option>All</option>
               <option>Game</option>
               <option>Movie</option>
             </select>
 
-            {/* box for starting year (oldest year to include) */}
             <input
               inputMode="numeric"
               pattern="[0-9]*"
@@ -376,10 +390,8 @@ async function addToLibrary(item) {
               }
               placeholder="Year from"
               className="rounded-xl bg-zinc-900/70 border border-zinc-800 px-3 py-2"
-              title="Start year"
             />
 
-            {/* box for ending year (latest year to include) */}
             <input
               inputMode="numeric"
               pattern="[0-9]*"
@@ -389,39 +401,32 @@ async function addToLibrary(item) {
               }
               placeholder="Year to"
               className="rounded-xl bg-zinc-900/70 border border-zinc-800 px-3 py-2"
-              title="End year"
             />
 
-            {/* text box for typing a platform name (like Xbox or Wii) */}
             <input
               value={platformFilter}
               onChange={(e) => setPlatformFilter(e.target.value)}
               placeholder="Platform (e.g., Xbox)"
               className="rounded-xl bg-zinc-900/70 border border-zinc-800 px-3 py-2"
-              title="Platform"
             />
 
-            {/* button that re-filters what’s already loaded (no new search call) */}
             <button
               type="button"
               onClick={reapplyFilters}
               className="rounded-xl border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm hover:bg-zinc-700"
-              title="Filter current results"
             >
               Apply Filters
             </button>
-            <button
-  type="button"
-  onClick={resetFilters}
-  className="rounded-xl border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm hover:bg-zinc-700"
-  title="Reset all filters"
->
-  Reset Filters
-</button>
-          </div>
-          {/* ------------------------------------------------ */}
 
-          {/* small warning if backend is down (we still show mock results) */}
+            <button
+              type="button"
+              onClick={resetFilters}
+              className="rounded-xl border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm hover:bg-zinc-700"
+            >
+              Reset Filters
+            </button>
+          </div>
+
           {err && (
             <p className="mt-3 text-sm text-amber-300">
               {err}
@@ -429,111 +434,80 @@ async function addToLibrary(item) {
           )}
         </section>
 
-        {/* Cards grid: one card per result item */}
+        {/* results grid */}
         <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {items.map((m) => (
-            <article
-              key={m.id || m.title}  // fallback to title if id missing
-              className="group flex gap-4 rounded-2xl border border-zinc-800 bg-zinc-900/60 p-4 hover:border-amber-400/70 hover:shadow-[0_0_0_1px] hover:shadow-amber-400/30 transition"
-            >
-              {/* cover image (or placeholder) */}
-              <img
-                src={m.coverUrl}
-                alt={m.title}
-                className="h-40 w-28 rounded-xl object-cover ring-1 ring-zinc-800 group-hover:ring-amber-400/60"
-              />
-              <div className="flex-1">
-                <div className="flex items-center justify-between">
-                  {/* title on the left */}
-                  <h3 className="text-lg font-semibold">{m.title}</h3>
-                  {/* release year/date on the right */}
-                  <span className="rounded-lg bg-zinc-800 px-2 py-1 text-xs text-zinc-300">
-                    {m.year ?? "—"}
-                  </span>
+          {items.map((m) => {
+            const rated = ratings[m.id];
+
+            return (
+              <article
+                key={m.id || m.title}
+                className={`group flex gap-4 rounded-2xl p-4 transition border ${
+                  rated
+                    ? "bg-amber-900/20 border-amber-500 shadow-[0_0_12px_rgba(251,191,36,0.4)]"
+                    : "bg-zinc-900/60 border-zinc-800 hover:border-amber-400/70 hover:shadow-[0_0_0_1px] hover:shadow-amber-400/30"
+                }`}
+              >
+                <img
+                  src={m.coverUrl}
+                  alt={m.title}
+                  className="h-40 w-28 rounded-xl object-cover ring-1 ring-zinc-800 group-hover:ring-amber-400/60"
+                />
+                <div className="flex-1">
+                  {rated && (
+                    <span className="inline-block mb-2 px-2 py-1 text-xs font-semibold rounded bg-amber-600/20 text-amber-400 border border-amber-500/40">
+                      Rated ★ {rated.stars}
+                    </span>
+                  )}
+
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-lg font-semibold">{m.title}</h3>
+                    <span className="rounded-lg bg-zinc-800 px-2 py-1 text-xs text-zinc-300">
+                      {m.year ?? "—"}
+                    </span>
+                  </div>
+
+                  <p className="mt-1 text-sm text-zinc-400">
+                    {m.type} • Platforms: {(m.platforms ?? []).join(", ")}
+                  </p>
+
+                  <p className="mt-3 text-sm leading-relaxed text-zinc-200">
+                    {m.summary}
+                  </p>
+
+                  <div className="mt-4 flex flex-col gap-2">
+                    <button
+                      className="rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-1.5 text-sm hover:bg-zinc-700"
+                      onClick={() => addToLibrary(m)}
+                    >
+                      Add to Library
+                    </button>
+
+                    {ratings[m.id] && (
+                      <div className="mt-1 text-sm text-amber-400">
+                        Rated {ratings[m.id].stars} / 5 — "{ratings[m.id].review}"
+                      </div>
+                    )}
+
+                    <div className="mt-1 flex gap-2">
+                      <button
+                        className="rounded-lg border border-blue-600 bg-blue-600/10 px-3 py-1.5 text-sm text-blue-300"
+                        onClick={() => {
+                          setCurrentGame(m);
+                          setStars(ratings[m.id]?.stars || 0);
+                          setReview(ratings[m.id]?.review || "");
+                          setShowModal(true);
+                        }}
+                      >
+                        {rated ? "Update Rating" : "Rate ★"}
+                      </button>
+                    </div>
+                  </div>
                 </div>
-                {/* type + platforms under the title */}
-                <p className="mt-1 text-sm text-zinc-400">
-                  {m.type} • Platforms: {(m.platforms ?? []).join(", ")}
-                </p>
-                {/* summary text */}
-                <p className="mt-3 text-sm leading-relaxed text-zinc-200">
-                  {m.summary}
-                </p>
-                {/* fake actions for now (hook these up later) */}
-                <div className="mt-4 flex gap-2">
-                  <button
-  className="rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-1.5 text-sm hover:bg-zinc-700"
-  onClick={() => addToLibrary(m)}
->
-  Add to Watchlist
-</button>
+              </article>
+            );
+          })}
 
-{ratings[m.id] && (
-  <div className="mt-3 text-sm text-amber-400">
-    Rated {ratings[m.id].stars} / 5 — "{ratings[m.id].review}"
-  </div>
-)}
-
-<div className="mt-4 flex gap-2">
-  <button
-    className="rounded-lg border border-blue-600 bg-blue-600/10 px-3 py-1.5 text-sm text-blue-300"
-    onClick={() => {
-      setCurrentGame(m);
-      setShowModal(true);
-    }}
-  >
-    Rate ★
-  </button>
-</div>
-{showModal && (
-  <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
-    <div className="bg-zinc-900 p-6 rounded-xl border border-zinc-700 max-w-sm w-full">
-      <h3 className="text-xl font-semibold mb-3">
-        Rate {currentGame?.title}
-      </h3>
-      <div className="flex gap-1 mb-3">
-        {[1, 2, 3, 4, 5].map((s) => (
-          <button
-            key={s}
-            onClick={() => setStars(s)}
-            className={`text-2xl ${
-              s <= stars ? "text-amber-400" : "text-zinc-600"
-            }`}
-          >
-            ★
-          </button>
-        ))}
-      </div>
-      <textarea
-        value={review}
-        onChange={(e) => setReview(e.target.value)}
-        placeholder="Write a short review (optional)"
-        className="w-full rounded-lg bg-zinc-800 border border-zinc-700 px-3 py-2 text-sm mb-4"
-      />
-      <div className="flex justify-end gap-2">
-        <button
-          onClick={() => setShowModal(false)}
-          className="px-3 py-2 text-sm rounded-lg bg-zinc-700 hover:bg-zinc-600"
-        >
-          Cancel
-        </button>
-        <button
-          onClick={submitRating}
-          className="px-3 py-2 text-sm rounded-lg bg-blue-600 hover:bg-blue-500"
-        >
-          Submit
-        </button>
-      </div>
-    </div>
-  </div>
-)}
-
-                </div>
-              </div>
-            </article>
-          ))}
-
-          {/* if not loading and no items yet, show a friendly empty state */}
           {!loading && !items.length && (
             <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-6 text-center text-zinc-400">
               No results yet. Try a search.
@@ -542,7 +516,50 @@ async function addToLibrary(item) {
         </section>
       </main>
 
-      {/* simple footer with year + team name */}
+      {/* Rating modal */}
+      {showModal && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
+          <div className="bg-zinc-900 p-6 rounded-xl border border-zinc-700 max-w-sm w-full">
+            <h3 className="text-xl font-semibold mb-3">
+              Rate {currentGame?.title}
+            </h3>
+            <div className="flex gap-1 mb-3">
+              {[1, 2, 3, 4, 5].map((s) => (
+                <button
+                  key={s}
+                  onClick={() => setStars(s)}
+                  className={`text-2xl ${
+                    s <= stars ? "text-amber-400" : "text-zinc-600"
+                  }`}
+                >
+                  ★
+                </button>
+              ))}
+            </div>
+            <textarea
+              value={review}
+              onChange={(e) => setReview(e.target.value)}
+              placeholder="Write a short review (optional)"
+              className="w-full rounded-lg bg-zinc-800 border border-zinc-700 px-3 py-2 text-sm mb-4"
+            />
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={() => setShowModal(false)}
+                className="px-3 py-2 text-sm rounded-lg bg-zinc-700 hover:bg-zinc-600"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={submitRating}
+                className="px-3 py-2 text-sm rounded-lg bg-blue-600 hover:bg-blue-500"
+              >
+                Submit
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <footer className="mt-10 border-t border-zinc-800 py-6 text-center text-sm text-zinc-500">
         © {new Date().getFullYear()} RetroRewind • CS180 Team{" "}
         <span className="text-amber-400">Bear 180</span>
@@ -550,3 +567,4 @@ async function addToLibrary(item) {
     </div>
   );
 }
+
