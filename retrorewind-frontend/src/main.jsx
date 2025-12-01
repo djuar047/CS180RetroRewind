@@ -1,6 +1,6 @@
 import { StrictMode, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { BrowserRouter } from "react-router-dom"; // lets us move between pages like Home, Login, and Profile
+import { BrowserRouter } from "react-router-dom";
 import "./index.css";
 import App from "./App.jsx";
 
@@ -11,12 +11,10 @@ function AppWrapper() {
   return <App auth={auth} setAuth={setAuth} />;
 }
 
-// This sets up the app and connects it to the "root" element in index.html.
-// We also wrap it with BrowserRouter so our app can use page routes.
 createRoot(document.getElementById("root")).render(
   <StrictMode>
     <BrowserRouter>
       <AppWrapper />
     </BrowserRouter>
-  </StrictMode>
+  </StrictMode>,
 );

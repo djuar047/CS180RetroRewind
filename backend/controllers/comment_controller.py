@@ -1,6 +1,7 @@
 from flask import jsonify, request
 from pymongo import MongoClient
 from models.comment_model import Comment
+from bson import ObjectId
 
 # Connect directly to MongoDB (avoids circular import)
 client = MongoClient("mongodb://localhost:27017/")
@@ -32,6 +33,60 @@ def post_comment():
 
 def get_comments_by_thread(thread_id):
     """Fetch all comments for a given thread."""
-    comments = list(comments_collection.find({"thread_id": thread_id}, {"_id": 0}))
+    docs = comments_collection.find({"thread_id": thread_id})
+    comments = []
+    for doc in docs:
+        comment = {
+            "id": str(doc["_id"]),
+            "content": doc.get("content", ""),
+            "date_created": doc.get("date_created"),
+            "thread_id": doc.get("thread_id"),
+            "user_id": doc.get("user_id"),
+            "deleted": doc.get("deleted", False),
+        }
+        comments.append(comment)
     return jsonify(comments), 200
+
+
+def update_comment(comment_id):
+    """Edit the content of a comment by its id."""
+    data = request.get_json()
+    new_content = data.get("content")
+
+    if not new_content:
+        return jsonify({"error": "Content is required"}), 400
+
+    try:
+        result = comments_collection.update_one(
+            {"_id": ObjectId(comment_id)},
+            {"$set": {"content": new_content, "deleted": False}}
+        )
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
+
+    if result.matched_count == 0:
+        return jsonify({"error": "Comment not found"}), 404
+
+    return jsonify({"message": "Comment updated"}), 200
+
+
+def delete_comment(comment_id):
+    """Soft delete a comment: keep it, but mark as deleted + change text."""
+    try:
+        result = comments_collection.update_one(
+            {"_id": ObjectId(comment_id)},
+            {
+                "$set": {
+                    "content": "Comment has been deleted",
+                    "deleted": True,
+                }
+            }
+        )
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
+
+    if result.matched_count == 0:
+        return jsonify({"error": "Comment not found"}), 404
+
+    return jsonify({"message": "Comment marked as deleted"}), 200
 
