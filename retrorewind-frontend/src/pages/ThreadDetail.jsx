@@ -32,12 +32,13 @@ function timeAgo(dateString) {
   return `${years} year${years !== 1 ? "s" : ""} ago`;
 }
 
-export default function ThreadDetail() {
-  const { title: encodedTitle } = useParams();
+export default function ThreadDetail({ auth }) {
+  const userId = auth?.userId;
+
+  // we now use the Mongo thread _id from the URL: /threads/:threadId
+  const { threadId } = useParams();
   const location = useLocation();
 
-  // decode the title from the URL
-  const threadTitle = decodeURIComponent(encodedTitle || "");
   // thread data from navigation state (if provided)
   const initialThread = location.state?.thread || null;
 
@@ -51,33 +52,34 @@ export default function ThreadDetail() {
   const [editingCommentId, setEditingCommentId] = useState(null);
   const [editCommentText, setEditCommentText] = useState("");
 
-  // Load comments (and thread info if not passed in)
+  // Load thread + comments
   useEffect(() => {
     async function load() {
       setLoading(true);
       setError("");
 
       try {
-        // if we don't have thread data, fetch all threads and find by title
-        if (!threadTitle) {
-          setError("Missing thread title.");
+        if (!threadId) {
+          setError("Missing thread id.");
           setLoading(false);
           return;
         }
 
+        // If no thread passed in via location.state, fetch it by id
         if (!initialThread) {
-          const resThreads = await fetch(`${API_BASE}/threads`);
-          const allThreads = await resThreads.json();
-          const found = allThreads.find((t) => t.title === threadTitle) || null;
-          setThread(found);
+          const resThread = await fetch(`${API_BASE}/threads/${threadId}`);
+          const dataThread = await resThread.json();
+          if (!resThread.ok) {
+            throw new Error(dataThread.error || "Failed to load thread");
+          }
+          setThread(dataThread);
         }
 
-        const resComments = await fetch(
-          `${API_BASE}/comments/${encodeURIComponent(threadTitle)}`,
-        );
+        const resComments = await fetch(`${API_BASE}/comments/${threadId}`);
         const dataComments = await resComments.json();
         setComments(Array.isArray(dataComments) ? dataComments : []);
       } catch (err) {
+        console.error(err);
         setError("Failed to load thread or comments.");
       } finally {
         setLoading(false);
@@ -86,11 +88,17 @@ export default function ThreadDetail() {
 
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [threadTitle]);
+  }, [threadId]);
 
+  // Post a new comment
   async function handlePostComment(e) {
     e.preventDefault();
     if (!newComment.trim()) return;
+
+    if (!userId) {
+      alert("You must be logged in to comment.");
+      return;
+    }
 
     setPosting(true);
     setError("");
@@ -101,24 +109,24 @@ export default function ThreadDetail() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           content: newComment.trim(),
-          thread_id: threadTitle, // backend uses title as thread_id
-          user_id: "demo-user", // placeholder user
+          thread_id: threadId,   // use thread id, not title
+          user_id: userId,
         }),
       });
 
+      const data = await res.json();
       if (!res.ok) {
-        throw new Error(await res.text());
+        throw new Error(data.error || "Failed to post");
       }
 
       setNewComment("");
 
       // reload comments
-      const resComments = await fetch(
-        `${API_BASE}/comments/${encodeURIComponent(threadTitle)}`,
-      );
+      const resComments = await fetch(`${API_BASE}/comments/${threadId}`);
       const dataComments = await resComments.json();
       setComments(Array.isArray(dataComments) ? dataComments : []);
     } catch (err) {
+      console.error(err);
       setError("Failed to post comment.");
     } finally {
       setPosting(false);
@@ -142,21 +150,22 @@ export default function ThreadDetail() {
       const res = await fetch(`${API_BASE}/comment/${editingCommentId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content: editCommentText }),
+        body: JSON.stringify({
+          content: editCommentText,
+          user_id: userId, // tell backend who is editing
+        }),
       });
 
       const updated = await res.json();
       if (!res.ok) throw new Error(updated.error);
 
-      // reload comments
-      const resComments = await fetch(
-        `${API_BASE}/comments/${encodeURIComponent(threadTitle)}`,
-      );
+      const resComments = await fetch(`${API_BASE}/comments/${threadId}`);
       setComments(await resComments.json());
 
       setEditingCommentId(null);
       setEditCommentText("");
     } catch (err) {
+      console.error(err);
       setError("Failed to edit comment.");
     }
   }
@@ -168,17 +177,17 @@ export default function ThreadDetail() {
     try {
       const res = await fetch(`${API_BASE}/comment/${comment.id}`, {
         method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ user_id: userId }), // who is deleting
       });
 
       const updated = await res.json();
       if (!res.ok) throw new Error(updated.error);
 
-      // reload comments (soft-deleted now)
-      const resComments = await fetch(
-        `${API_BASE}/comments/${encodeURIComponent(threadTitle)}`,
-      );
+      const resComments = await fetch(`${API_BASE}/comments/${threadId}`);
       setComments(await resComments.json());
     } catch (err) {
+      console.error(err);
       setError("Failed to delete comment.");
     }
   }
@@ -203,7 +212,7 @@ export default function ThreadDetail() {
           <h2 className="text-xl font-semibold mb-1">{thread.title}</h2>
           <p className="text-zinc-200 mb-2">{thread.content}</p>
           <p className="text-sm text-zinc-500">
-            Posted by User {thread.user_id || "unknown"}
+            Posted by {thread.username || `User ${thread.user_id || "unknown"}`}
           </p>
           <div className="mt-2">
             <span className="inline-flex items-center rounded-full border border-zinc-700 px-2 py-0.5 text-xs text-zinc-300">
@@ -227,6 +236,7 @@ export default function ThreadDetail() {
                 c.deleted || c.content === "Comment has been deleted";
               const isEditing = editingCommentId === c.id;
               const created = timeAgo(c.date_created);
+              const canEdit = userId && c.user_id === userId;
 
               return (
                 <div
@@ -261,7 +271,9 @@ export default function ThreadDetail() {
                       {/* NORMAL / DELETED VIEW */}
                       <p
                         className={`text-sm ${
-                          isDeleted ? "text-zinc-500 italic" : "text-zinc-100"
+                          isDeleted
+                            ? "text-zinc-500 italic"
+                            : "text-zinc-100"
                         }`}
                       >
                         {isDeleted ? "Comment has been deleted" : c.content}
@@ -269,14 +281,16 @@ export default function ThreadDetail() {
 
                       {/* USER + DATE */}
                       <div className="flex justify-between mt-1 text-xs text-zinc-500">
-                        <span>By User {c.user_id || "unknown"}</span>
+                        <span>
+                          By {c.username || `User ${c.user_id || "unknown"}`}
+                        </span>
                         <span>{created}</span>
                       </div>
                     </>
                   )}
 
-                  {/* ACTION BUTTONS */}
-                  {!isDeleted && !isEditing && (
+                  {/* ACTION BUTTONS – only if owner */}
+                  {!isDeleted && !isEditing && canEdit && (
                     <div className="mt-2 flex gap-2">
                       <button
                         className="text-xs rounded-md border border-zinc-700 px-2 py-1 hover:bg-zinc-800"

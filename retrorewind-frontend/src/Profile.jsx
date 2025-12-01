@@ -1,21 +1,27 @@
+// src/Profile.jsx
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import React from "react";
 
-export default function Profile() {
-  const location = useLocation();
+export default function Profile({ auth }) {
+  const userId = auth?.userId;
+  const token = auth?.token;
   const navigate = useNavigate();
 
-  // figure out which email to use (login → localStorage → fallback)
-  function getInitialEmail() {
-    const fromLogin = location.state?.email;
-    const fromStorage = localStorage.getItem("rr_email");
-    return fromLogin || fromStorage || "user@example.com";
+  // Guard if user is not logged in
+  if (!userId || !token) {
+    return (
+      <div className="min-h-screen bg-zinc-950 text-zinc-100 flex items-center justify-center">
+        <p className="text-center text-zinc-300">
+          You must be logged in to view your profile.
+        </p>
+      </div>
+    );
   }
 
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+
   const [editMode, setEditMode] = useState(false);
   const [formData, setFormData] = useState({
     username: "",
@@ -24,7 +30,7 @@ export default function Profile() {
     avatar_url: "",
   });
 
-  // Fetch user profile
+  // ---------- FETCH PROFILE ----------
   useEffect(() => {
     async function fetchProfile() {
       try {
@@ -59,7 +65,7 @@ export default function Profile() {
     fetchProfile();
   }, [userId, token]);
 
-  // Fetch user library
+  // ---------- FETCH LIBRARY ----------
   useEffect(() => {
     async function fetchLibrary() {
       try {
@@ -67,7 +73,7 @@ export default function Profile() {
           `http://127.0.0.1:5000/profile/${userId}/library`,
           {
             headers: { Authorization: `Bearer ${token}` },
-          },
+          }
         );
         const data = await res.json();
         if (res.ok) {
@@ -84,7 +90,7 @@ export default function Profile() {
     if (userId && token) fetchLibrary();
   }, [userId, token]);
 
-  // Fetch user ratings
+  // ---------- FETCH RATINGS ----------
   useEffect(() => {
     async function fetchRatings() {
       try {
@@ -92,7 +98,7 @@ export default function Profile() {
           `http://127.0.0.1:5000/profile/${userId}/ratings`,
           {
             headers: { Authorization: `Bearer ${token}` },
-          },
+          }
         );
         const data = await res.json();
         if (res.ok) {
@@ -109,75 +115,10 @@ export default function Profile() {
     if (userId && token) fetchRatings();
   }, [userId, token]);
 
+  // ---------- HANDLERS ----------
   function handleChange(e) {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
-  }
-
-  // main user info shown on the profile page
-  const [user, setUser] = useState(() => {
-    const email = getInitialEmail();
-    const savedBio = localStorage.getItem("rr_bio");
-
-    return {
-      username: makeUsername(email),
-      email,
-      bio: savedBio || "I love old-school games and classic movies!",
-      avatar_url: "https://placehold.co/120x120?text=User",
-    };
-  });
-
-  // state for editing the bio
-  const [isEditingBio, setIsEditingBio] = useState(false);
-  const [bioDraft, setBioDraft] = useState(user.bio);
-
-  // update page if login sends new email
-  useEffect(() => {
-    const emailFromLogin = location.state?.email;
-    if (emailFromLogin) {
-      setUser((prev) => ({
-        ...prev,
-        ratings: (prev?.ratings || []).filter((r) => r.rating_id !== ratingId),
-      }));
-      localStorage.setItem("rr_email", emailFromLogin);
-    }
-    console.log("Profile page loaded");
-  }, [location.state]);
-
-  // start editing bio
-  function handleEditBio() {
-    setBioDraft(user.bio);
-    setIsEditingBio(true);
-  }
-
-  async function removeFromLibrary(itemId) {
-    if (!window.confirm("Remove this item from your library?")) return;
-
-    try {
-      const res = await fetch(
-        `http://127.0.0.1:5000/profile/${userId}/library/${itemId}`,
-        {
-          method: "DELETE",
-          headers: { Authorization: `Bearer ${token}` },
-        },
-      );
-
-      if (!res.ok) {
-        const data = await res.json();
-        return alert(data.error || "Server error removing item.");
-      }
-
-      // Remove from UI
-      setUser((prev) => ({
-        ...prev,
-        library: (prev?.library || []).filter((i) => i.id !== itemId),
-      }));
-
-      alert("Item removed!");
-    } catch (err) {
-      console.error(err);
-      alert("Server error removing item.");
-    }
   }
 
   async function handleUpdate(e) {
@@ -192,168 +133,279 @@ export default function Profile() {
             Authorization: `Bearer ${token}`,
           },
           body: JSON.stringify(formData),
-        },
+        }
       );
 
-  // cancel editing
-  function handleCancelEdit() {
-    setBioDraft(user.bio);
-    setIsEditingBio(false);
+      const data = await res.json();
+
+      if (res.ok) {
+        setUser((prev) => ({ ...(prev || {}), ...formData }));
+        setEditMode(false);
+        alert("Profile updated successfully!");
+      } else {
+        alert(data.error || "Failed to update profile.");
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Server not reachable.");
+    }
   }
 
-  // clear saved login + send back home
-  function handleLogout() {
-    localStorage.removeItem("rr_email");
-    localStorage.removeItem("rr_bio");
-    navigate("/");
+  async function removeFromLibrary(itemId) {
+    if (!window.confirm("Remove this item from your library?")) return;
+
+    try {
+      const res = await fetch(
+        `http://127.0.0.1:5000/profile/${userId}/library/${itemId}`,
+        {
+          method: "DELETE",
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        return alert(data.error || "Server error removing item.");
+      }
+
+      setUser((prev) => ({
+        ...(prev || {}),
+        library: (prev?.library || []).filter((i) => i.id !== itemId),
+      }));
+
+      alert("Item removed!");
+    } catch (err) {
+      console.error(err);
+      alert("Server error removing item.");
+    }
   }
 
+  async function deleteRating(ratingId) {
+    if (!window.confirm("Delete this rating?")) return;
+
+    try {
+      const res = await fetch(`http://127.0.0.1:5000/ratings/${ratingId}`, {
+        method: "DELETE",
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        return alert(data.error || "Failed to delete rating.");
+      }
+
+      setUser((prev) => ({
+        ...(prev || {}),
+        ratings: (prev?.ratings || []).filter(
+          (r) => r.rating_id !== ratingId && r._id !== ratingId
+        ),
+      }));
+
+      alert("Rating deleted.");
+    } catch (err) {
+      console.error(err);
+      alert("Server error deleting rating.");
+    }
+  }
+
+  // ---------- RENDER ----------
   if (loading)
-    return <p className="text-center mt-10 text-zinc-300">Loading...</p>;
-  if (error) return <p className="text-center mt-10 text-red-400">{error}</p>;
+    return (
+      <p className="text-center mt-10 text-zinc-300">Loading profile…</p>
+    );
+  if (error)
+    return <p className="text-center mt-10 text-red-400">{error}</p>;
   if (!user) return null;
 
   return (
-    <div className="min-h-screen bg-zinc-950 text-zinc-100 flex items-center justify-center">
-      <div className="w-full max-w-md bg-zinc-900 border border-zinc-800 rounded-xl p-6 shadow-md">
-        {/* avatar + username */}
-        <div className="flex flex-col items-center">
+    <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col items-center py-10 gap-6">
+      {/* Profile Card */}
+      <div className="w-full max-w-md bg-zinc-900 border border-zinc-800 rounded-xl p-6 shadow-md relative">
+        <button
+          onClick={() => navigate("/")}
+          className="absolute top-4 right-4 bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-lg"
+        >
+          Home
+        </button>
+
+        <div className="flex flex-col items-center mt-6">
           <img
             src={
-              formData.avatar_url || "https://placehold.co/120x120?text=User"
+              formData.avatar_url ||
+              "https://placehold.co/120x120?text=User"
             }
             alt="User avatar"
             className="w-24 h-24 rounded-full border border-zinc-700 mb-4"
           />
-          <h1 className="text-2xl font-bold text-amber-400">{user.username}</h1>
-          <p className="text-sm text-zinc-400">{user.email}</p>
-        </div>
 
-        {/* bio section */}
-        <div className="mt-6">
-          <h2 className="text-lg font-semibold mb-2">About Me</h2>
-
-          {/* bio when not editing */}
-          {!isEditingBio && (
-            <p className="text-sm text-zinc-300 leading-relaxed">{user.bio}</p>
-          )}
-
-          {/* bio editor */}
-          {isEditingBio && (
-            <div className="flex flex-col gap-2">
-              <textarea
-                value={bioDraft}
-                onChange={(e) => setBioDraft(e.target.value)}
-                className="w-full rounded-lg bg-zinc-800 border border-zinc-700 px-3 py-2 text-sm"
-                rows={3}
+          {!editMode ? (
+            <>
+              <h1 className="text-2xl font-bold text-amber-400">
+                {user.username}
+              </h1>
+              <p className="text-sm text-zinc-400">{user.email}</p>
+              <p className="mt-2 text-sm text-zinc-300">{user.bio}</p>
+              <button
+                onClick={() => setEditMode(true)}
+                className="mt-6 rounded-lg border border-zinc-700 bg-zinc-800 px-4 py-2 text-sm hover:bg-zinc-700"
+              >
+                Edit Profile
+              </button>
+            </>
+          ) : (
+            <form
+              onSubmit={handleUpdate}
+              className="w-full flex flex-col gap-3 mt-2"
+            >
+              <input
+                type="text"
+                name="username"
+                value={formData.username}
+                onChange={handleChange}
+                placeholder="Username"
+                className="p-2 rounded bg-zinc-800 border border-zinc-700"
+                required
               />
-              <div className="flex justify-end gap-2">
+              <input
+                type="email"
+                name="email"
+                value={formData.email}
+                onChange={handleChange}
+                placeholder="Email"
+                className="p-2 rounded bg-zinc-800 border border-zinc-700"
+                required
+              />
+              <input
+                type="text"
+                name="avatar_url"
+                value={formData.avatar_url}
+                onChange={handleChange}
+                placeholder="Avatar URL"
+                className="p-2 rounded bg-zinc-800 border border-zinc-700"
+              />
+              <textarea
+                name="bio"
+                value={formData.bio}
+                onChange={handleChange}
+                placeholder="Bio"
+                className="p-2 rounded bg-zinc-800 border border-zinc-700 resize-none"
+              />
+              <div className="flex gap-2 justify-center mt-2">
+                <button
+                  type="submit"
+                  className="bg-blue-600 hover:bg-blue-500 px-4 py-2 rounded"
+                >
+                  Save
+                </button>
                 <button
                   type="button"
-                  onClick={handleCancelEdit}
-                  className="rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-1.5 text-sm hover:bg-zinc-700"
+                  onClick={() => setEditMode(false)}
+                  className="bg-zinc-700 hover:bg-zinc-600 px-4 py-2 rounded"
                 >
                   Cancel
                 </button>
-                <button
-                  type="button"
-                  onClick={handleSaveBio}
-                  className="rounded-lg border border-blue-600 bg-blue-600/10 px-3 py-1.5 text-sm text-blue-300 hover:bg-blue-600/20"
-                >
-                  Save Bio
-                </button>
               </div>
-            </div>
+            </form>
           )}
         </div>
       </div>
-      <div className="w-full max-w-6xl flex flex-col lg:flex-row gap-6 justify-center mx-auto">
-        {/* Library Section */}
-        <div className="w-full max-w-md bg-zinc-900 border border-zinc-800 rounded-xl p-6 shadow-md mb-6">
-          <h2 className="text-xl font-semibold text-amber-400 text-center mb-4">
-            My Library
-          </h2>
-          <div className="flex flex-col gap-3">
-            {user.library && user.library.length > 0 ? (
-              user.library.map((item, index) => (
-                <div
-                  key={index}
-                  className="bg-zinc-800 p-3 rounded-lg border border-zinc-700 flex justify-between items-center"
+
+      {/* Library Section */}
+      <div className="w-full max-w-md bg-zinc-900 border border-zinc-800 rounded-xl p-6 shadow-md">
+        <h2 className="text-xl font-semibold text-amber-400 text-center mb-4">
+          My Library
+        </h2>
+        <div className="flex flex-col gap-3">
+          {user.library && user.library.length > 0 ? (
+            user.library.map((item, index) => (
+              <div
+                key={index}
+                className="bg-zinc-800 p-3 rounded-lg border border-zinc-700 flex justify-between items-center"
+              >
+                <div>
+                  <p className="text-lg font-semibold text-white">
+                    {item.title}
+                  </p>
+                  <p className="text-sm text-zinc-400">{item.type}</p>
+                  <p className="text-sm text-zinc-500">{item.year}</p>
+                </div>
+                <button
+                  onClick={() => removeFromLibrary(item.id)}
+                  className="ml-4 text-red-400 hover:text-red-300 text-sm px-2 py-1 border border-red-400 rounded"
                 >
-                  <div>
-                    <p className="text-lg font-semibold text-white">
-                      {item.title}
-                    </p>
-                    <p className="text-sm text-zinc-400">{item.type}</p>
-                    <p className="text-sm text-zinc-500">{item.year}</p>
-                  </div>
+                  Remove
+                </button>
+              </div>
+            ))
+          ) : (
+            <p className="text-center text-zinc-400 mt-2">
+              Your watchlist is empty
+            </p>
+          )}
+        </div>
+      </div>
+
+      {/* Ratings Section */}
+      <div className="w-full max-w-md bg-zinc-900 border border-zinc-800 rounded-xl p-6 shadow-md">
+        <h2 className="text-xl font-semibold text-amber-400 text-center mb-4">
+          My Ratings
+        </h2>
+        <div className="flex flex-col gap-4">
+          {user.ratings && user.ratings.length > 0 ? (
+            user.ratings.map((rating) => (
+              <div
+                key={rating.rating_id}
+                className="bg-zinc-800 p-4 rounded-lg border border-zinc-700 flex gap-4"
+              >
+                {/* Cover image */}
+                <img
+                  src={
+                    rating.cover_url ||
+                    "https://placehold.co/80x110?text=No+Cover"
+                  }
+                  alt={rating.title}
+                  className="w-20 h-28 rounded-md object-cover border border-zinc-700"
+                />
+
+                <div className="flex-1">
+                  {/* Title */}
+                  <p className="text-lg font-semibold text-white">
+                    {rating.title}
+                  </p>
+
+                  {/* Type + Year */}
+                  <p className="text-sm text-zinc-400">
+                    {rating.type} • {rating.year || "—"}
+                  </p>
+
+                  {/* Stars */}
+                  <p className="text-sm text-amber-400 mt-1">
+                    ★ {rating.stars} / 5
+                  </p>
+
+                  {/* Review text */}
+                  <p className="text-sm text-zinc-500 mt-1">
+                    {rating.review_text || ""}
+                  </p>
+
+                  {/* Delete button */}
                   <button
-                    onClick={() => removeFromLibrary(item.id)}
-                    className="ml-4 text-red-400 hover:text-red-300 text-sm px-2 py-1 border border-red-400 rounded"
+                    onClick={() => deleteRating(rating.rating_id)}
+                    className="mt-2 text-red-400 hover:text-red-300 text-sm"
                   >
-                    Remove
+                    Delete Rating
                   </button>
                 </div>
-              ))
-            ) : (
-              <p className="text-center text-zinc-400 mt-2">
-                Your watchlist is empty
-              </p>
-            )}
-          </div>
+              </div>
+            ))
+          ) : (
+            <p className="text-center text-zinc-400 mt-2">
+              You have not rated anything yet
+            </p>
+          )}
         </div>
 
-        {/* Ratings Section */}
-        <div className="w-full max-w-md bg-zinc-900 border border-zinc-800 rounded-xl p-6 shadow-md">
-          <h2 className="text-xl font-semibold text-amber-400 text-center mb-4">
-            My Ratings
-          </h2>
-          <div className="flex flex-col gap-4">
-            {user.ratings && user.ratings.length > 0 ? (
-              user.ratings.map((rating) => (
-                <div
-                  key={rating.rating_id}
-                  className="bg-zinc-800 p-3 rounded-lg border border-zinc-700 flex gap-3"
-                >
-                  <img
-                    src={
-                      rating.cover_url ||
-                      "https://placehold.co/80x110?text=No+Cover"
-                    }
-                    alt={rating.title}
-                    className="w-20 h-28 rounded-md object-cover border border-zinc-700"
-                  />
-
-                  <div className="flex-1">
-                    <p className="text-lg font-semibold text-white">
-                      {rating.title}
-                    </p>
-                    <p className="text-sm text-zinc-400">
-                      {rating.type} • {rating.year}
-                    </p>
-                    <p className="text-sm text-amber-400 mt-1">
-                      ★ {rating.stars} / 5
-                    </p>
-                    <p className="text-sm text-zinc-500 mt-1">
-                      {rating.review_text}
-                    </p>
-
-                    <button
-                      onClick={() => deleteRating(rating.rating_id)}
-                      className="mt-2 text-red-400 hover:text-red-300 text-sm"
-                    >
-                      Delete Rating
-                    </button>
-                  </div>
-                </div>
-              ))
-            ) : (
-              <p className="text-center text-zinc-400 mt-2">
-                You have not rated anything yet
-              </p>
-            )}
-          </div>
-        </div>
       </div>
     </div>
   );
