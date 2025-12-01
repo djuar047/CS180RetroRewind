@@ -1,9 +1,10 @@
 import firebase_admin
 from firebase_admin import credentials, firestore, auth, storage
+import os
 
-
-# Path to firebase super secret key
-cred = credentials.Certificate("retrorewindKey.json")
+# Path to firebase super secret key 
+cred_path = os.path.join(os.path.dirname(__file__), "retrorewindKey.json")
+cred = credentials.Certificate(cred_path)
 
 # initializing the firebase api
 try:
