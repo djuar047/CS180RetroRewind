@@ -1,8 +1,6 @@
-import os
-import time
-import requests
-from datetime import datetime, timezone
-from flask import Flask, request, jsonify
+# backend/app.py
+
+from flask import Flask, jsonify
 from flask_cors import CORS
 from dotenv import load_dotenv
 from pymongo import MongoClient
@@ -12,7 +10,6 @@ from authorization_paths import auth_blueprint
 from bson import ObjectId
 import bcrypt
 
-# Routes
 from routes.thread_routes import thread_bp
 from routes.comment_routes import comment_bp
 from user import User
@@ -268,17 +265,15 @@ def update_profile(user_id):
     if avatar_url is not None:
         updates["profile.avatar_url"] = avatar_url
 
-    db["users"].update_one({"_id": ObjectId(user_id)}, {"$set": updates})
-    return jsonify({"message": "Profile updated"})
+from routes.rating_routes import rating_bp
+from routes.profile_routes import profile_bp
+from routes.search_routes import search_bp
 
 
 @app.post("/profile/<user_id>/library/add")
 def add_to_library(user_id):
     data = request.json or {}
 
-    # Validate input
-    if not all([data.get("id"), data.get("title"), data.get("type")]):
-        return jsonify({"error": "missing_fields"}), 400
 
     media = {
         "id": int(data.get("id")),
@@ -616,5 +611,6 @@ def health():
 
 
 if __name__ == "__main__":
+    app = create_app()
     app.run(host="127.0.0.1", port=5000, debug=True)
 
