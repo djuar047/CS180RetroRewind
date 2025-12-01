@@ -351,32 +351,52 @@ export default function Profile({ auth }) {
         <h2 className="text-xl font-semibold text-amber-400 text-center mb-4">
           My Ratings
         </h2>
-        <div className="flex flex-col gap-3">
+        <div className="flex flex-col gap-4">
           {user.ratings && user.ratings.length > 0 ? (
             user.ratings.map((rating) => (
               <div
-                key={rating.rating_id || rating._id}
-                className="bg-zinc-800 p-3 rounded-lg border border-zinc-700 flex justify-between items-center"
+                key={rating.rating_id}
+                className="bg-zinc-800 p-4 rounded-lg border border-zinc-700 flex gap-4"
               >
-                <div>
+                {/* Cover image */}
+                <img
+                  src={
+                    rating.cover_url ||
+                    "https://placehold.co/80x110?text=No+Cover"
+                  }
+                  alt={rating.title}
+                  className="w-20 h-28 rounded-md object-cover border border-zinc-700"
+                />
+
+                <div className="flex-1">
+                  {/* Title */}
                   <p className="text-lg font-semibold text-white">
                     {rating.title}
                   </p>
+
+                  {/* Type + Year */}
                   <p className="text-sm text-zinc-400">
-                    Score: {rating.stars} / 5
+                    {rating.type} • {rating.year || "—"}
                   </p>
-                  <p className="text-sm text-zinc-500">
-                    {rating.review_text}
+
+                  {/* Stars */}
+                  <p className="text-sm text-amber-400 mt-1">
+                    ★ {rating.stars} / 5
                   </p>
+
+                  {/* Review text */}
+                  <p className="text-sm text-zinc-500 mt-1">
+                    {rating.review_text || ""}
+                  </p>
+
+                  {/* Delete button */}
+                  <button
+                    onClick={() => deleteRating(rating.rating_id)}
+                    className="mt-2 text-red-400 hover:text-red-300 text-sm"
+                  >
+                    Delete Rating
+                  </button>
                 </div>
-                <button
-                  onClick={() =>
-                    deleteRating(rating.rating_id || rating._id)
-                  }
-                  className="ml-4 text-red-400 hover:text-red-300 text-sm px-2 py-1 border border-red-400 rounded"
-                >
-                  Delete
-                </button>
               </div>
             ))
           ) : (
@@ -385,6 +405,7 @@ export default function Profile({ auth }) {
             </p>
           )}
         </div>
+
       </div>
     </div>
   );
