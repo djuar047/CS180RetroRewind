@@ -561,12 +561,27 @@ async function deleteRating(ratingId, mediaId) {
             </Link>
 
             {/* Login */}
-            <Link
-              to="/login"
-              className="rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm font-medium hover:bg-zinc-700 transition"
-            >
-              Login
-            </Link>
+            {auth?.userId ? (
+              <button
+                onClick={() => {
+                  setAuth({ userId: null, token: null });
+                  localStorage.removeItem("rr_email");
+                  localStorage.removeItem("rr_bio");
+                  alert("Logged out!");
+                }}
+                className="rounded-lg border border-red-600 bg-red-600/10 px-3 py-2 text-sm font-medium text-red-300 hover:bg-red-600/20 transition"
+              >
+                Logout
+              </button>
+            ) : (
+              <Link
+                to="/login"
+                className="rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm font-medium hover:bg-zinc-700 transition"
+              >
+                Login
+              </Link>
+            )}
+
 
             {/* Profile */}
             <Link
