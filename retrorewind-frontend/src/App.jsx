@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Routes, Route, Link } from "react-router-dom";
+import { useEffect } from "react";
 
 import bear from "./assets/bear.webp";
 import Login from "./Login.jsx";
@@ -88,6 +89,227 @@ function Home({ auth, setAuth }) {
       return true;
     });
   }
+   useEffect(() => {
+
+
+
+  async function loadUserRatings() {
+
+
+    if (!auth?.userId) return;
+
+
+
+
+
+    try {
+
+
+      const res = await fetch(
+
+
+        `http://127.0.0.1:5000/profile/${auth.userId}/ratings`,
+
+
+        { headers: { Authorization: `Bearer ${auth.token}` } }
+
+
+      );
+
+
+      const data = await res.json();
+
+
+
+
+
+      if (!res.ok) return;
+
+
+
+
+
+      // Convert into dictionary: { media_id: {...rating} }
+
+
+      const mapped = {};
+
+
+      data.forEach((r) => {
+
+
+        mapped[r.media_id] = r;
+
+
+      });
+
+
+
+
+
+      setRatings(mapped);
+
+
+    } catch (err) {
+
+
+      console.error("Failed loading user ratings", err);
+
+
+    }
+
+
+  }
+
+
+
+
+
+  loadUserRatings();
+
+
+}, [auth]);
+
+
+
+
+
+async function updateRating(mediaId) {
+
+
+  const rating = ratings[mediaId];
+
+
+  if (!rating) return;
+
+
+
+
+
+  const ratingId = rating.rating_id || rating._id;
+
+
+
+
+
+  try {
+
+
+    const res = await fetch(`http://127.0.0.1:5000/ratings/${ratingId}`, {
+
+
+      method: "PUT",
+
+
+      headers: {
+
+
+        "Content-Type": "application/json",
+
+
+        Authorization: `Bearer ${auth.token}`
+
+
+      },
+
+
+      body: JSON.stringify({
+
+
+        stars,
+
+
+        review_text: review
+
+
+      })
+
+
+    });
+
+
+
+
+
+    if (!res.ok) {
+
+
+      const msg = await res.text();
+
+
+      alert("Failed to update rating.\n" + msg);
+
+
+      return;
+
+
+    }
+
+
+
+
+
+    // update UI
+
+
+    setRatings(prev => ({
+
+
+      ...prev,
+
+
+      [mediaId]: {
+
+
+        ...prev[mediaId],
+
+
+        stars,
+
+
+        review,
+
+
+        rating_id: ratingId
+
+
+      }
+
+
+    }));
+
+
+
+
+
+    alert("Rating updated!");
+
+
+    setShowModal(false);
+
+
+    setStars(0);
+
+
+    setReview("");
+
+
+
+
+
+  } catch (err) {
+
+
+    console.error(err);
+
+
+    alert("Server error updating rating.");
+
+
+  }
+
+
+}
   // --------------------------------------------------
 
   // MOCK data to show something if the backend isn't running.
@@ -159,6 +381,11 @@ function Home({ auth, setAuth }) {
 
   // Ratings 
   async function submitRating() {
+     if (ratings[currentGame.id]) {
+      await updateRating(currentGame.id);
+      return;
+      }
+
     if (!auth?.userId) {
       alert("Please log in to rate items.");
       return;
@@ -184,7 +411,12 @@ function Home({ auth, setAuth }) {
           review_text: review,
         }),
       });
-  
+   if (!res.ok) {
+        const message = await res.text();
+        console.error("Rating submit error:", message);
+        alert("Failed to submit rating.\n\nServer says: " + message);
+        return;
+}
       const data = await res.json();
   
       if (res.status === 409) {
@@ -212,7 +444,6 @@ function Home({ auth, setAuth }) {
     }
   }
   
-
   async function addToLibrary(item) {
     if (!auth?.userId) {
       alert("Please log in to add items to your library.");
@@ -255,9 +486,36 @@ function Home({ auth, setAuth }) {
     }
   }
   
-  
-  
+     async function loadRatings() {
+  const res = await fetch(
+    `http://127.0.0.1:5000/profile/${auth.userId}/ratings`,
+    { headers: { Authorization: `Bearer ${auth.token}` } }
+  );
+  const data = await res.json();
+  /*setRatings((prev) => ({
+    ...prev,
+    [mediaId]: data
+  }));*/
+  const mapped = {};
+  data.forEach((r) => (mapped[r.media_id] = r));
+  setRatings(mapped);
+}
 
+async function deleteRating(ratingId, mediaId) {
+  const res = await fetch(`http://127.0.0.1:5000/ratings/${ratingId}`, {
+    method: "DELETE",
+  });
+
+  if (!res.ok) return alert("Failed to delete.");
+  // remove from local UI
+  setRatings((prev) => {
+    const copy = {...prev};
+    delete copy[mediaId];
+    return copy;
+
+  });
+  alert("Deleted!");
+}
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100">
       {/* Top bar with logo + app name */}
@@ -418,10 +676,15 @@ function Home({ auth, setAuth }) {
 
         {/* Cards grid: one card per result item */}
         <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {items.map((m) => (
+         {items.map((m) => {
+            const rated = ratings[m.id];
+            return (
             <article
               key={m.id || m.title}  // fallback to title if id missing
-              className="group flex gap-4 rounded-2xl border border-zinc-800 bg-zinc-900/60 p-4 hover:border-amber-400/70 hover:shadow-[0_0_0_1px] hover:shadow-amber-400/30 transition"
+              className={`group flex gap-4 rounded-2xl p-4 transition border
+              ${rated
+              ? "bg-amber-900/20 border-amber-500 shadow-[0_0_12px_rgba(251,191,36,0.4)]"
+              : "bg-zinc-900/60 border-zinc-800 hover:border-amber-400/70 hover:shadow-[0_0_0_1px] hover:shadow-amber-400/30"}`}
             >
               {/* cover image (or placeholder) */}
               <img
@@ -430,6 +693,12 @@ function Home({ auth, setAuth }) {
                 className="h-40 w-28 rounded-xl object-cover ring-1 ring-zinc-800 group-hover:ring-amber-400/60"
               />
               <div className="flex-1">
+                {/* RATED BADGE */}
+          {rated && (
+                 <span className="inline-block mb-2 px-2 py-1 text-xs font-semibold rounded bg-amber-600/20 text-amber-400 border border-amber-500/40">
+                  Rated ★ {rated.stars}
+                  </span>
+                )}
                 <div className="flex items-center justify-between">
                   {/* title on the left */}
                   <h3 className="text-lg font-semibold">{m.title}</h3>
@@ -446,37 +715,76 @@ function Home({ auth, setAuth }) {
                 <p className="mt-3 text-sm leading-relaxed text-zinc-200">
                   {m.summary}
                 </p>
-                {/* actions */}
-                <div className="mt-4 flex flex-col gap-2">
-                <button
-                    className="rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-1.5 text-sm hover:bg-zinc-700"
-                    onClick={() => addToLibrary(m)}
-                  >
-                    Add to Library
-                  </button>
+                {/* fake actions for now (hook these up later) */}
+                <div className="mt-4 flex gap-2">
+                  <button
+
+  className="rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-1.5 text-sm hover:bg-zinc-700"
+  onClick={() => addToLibrary(m)}
+>
+  Add to Watchlist
+</button>
 
 
-                  {ratings[m.id] && (
-                    <div className="mt-1 text-sm text-amber-400">
-                      Rated {ratings[m.id].stars} / 5 — "{ratings[m.id].review}"
-                    </div>
-                  )}
+<div className="mt-4 flex gap-2">
+  <button
+    className="rounded-lg border border-blue-600 bg-blue-600/10 px-3 py-1.5 text-sm text-blue-300"
+    onClick={() => {
+      setCurrentGame(m);
+      loadRatings();
+      setShowModal(true);
+    }}
+  >
+     {rated ? "Update Rating" : "Rate ★"}
+  </button>
+</div>
+{showModal && (
+  <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
+    <div className="bg-zinc-900 p-6 rounded-xl border border-zinc-700 max-w-sm w-full">
+      <h3 className="text-xl font-semibold mb-3">
+        Rate {currentGame?.title}
+      </h3>
+      <div className="flex gap-1 mb-3">
+        {[1, 2, 3, 4, 5].map((s) => (
+          <button
+            key={s}
+            onClick={() => setStars(s)}
+            className={`text-2xl ${
+              s <= stars ? "text-amber-400" : "text-zinc-600"
+            }`}
+          >
+            ★
+          </button>
+        ))}
+      </div>
+      <textarea
+        value={review}
+        onChange={(e) => setReview(e.target.value)}
+        placeholder="Write a short review (optional)"
+        className="w-full rounded-lg bg-zinc-800 border border-zinc-700 px-3 py-2 text-sm mb-4"
+      />
+      <div className="flex justify-end gap-2">
+        <button
+          onClick={() => setShowModal(false)}
+          className="px-3 py-2 text-sm rounded-lg bg-zinc-700 hover:bg-zinc-600"
+        >
+          Cancel
+        </button>
+        <button
+          onClick={submitRating}
+          className="px-3 py-2 text-sm rounded-lg bg-blue-600 hover:bg-blue-500"
+        >
+          Submit
+        </button>
+      </div>
+    </div>
+  </div>
+)}
 
-                  <div className="mt-1 flex gap-2">
-                    <button
-                      className="rounded-lg border border-blue-600 bg-blue-600/10 px-3 py-1.5 text-sm text-blue-300"
-                      onClick={() => {
-                        setCurrentGame(m);
-                        setShowModal(true);
-                      }}
-                    >
-                      Rate ★
-                    </button>
-                  </div>
                 </div>
               </div>
             </article>
-          ))}
+);})}
 
           {/* if not loading and no items yet, show a friendly empty state */}
           {!loading && !items.length && (
