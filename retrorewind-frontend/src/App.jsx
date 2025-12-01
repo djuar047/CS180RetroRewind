@@ -17,18 +17,22 @@ import ThreadDetail from "./pages/ThreadDetail.jsx";
  * - "/threads/:title" -> Single thread detail
  * - "/createAccount" -> Create account
  */
-export default function App({ auth, setAuth }) {
+
+export default function App() {
+  const [auth, setAuth] = useState({ userId: null, token: null });
+
   return (
     <Routes>
       <Route path="/" element={<Home auth={auth} setAuth={setAuth} />} />
       <Route path="/login" element={<Login auth={auth} setAuth={setAuth} />} />
       <Route path="/profile" element={<Profile auth={auth} />} />
       <Route path="/createAccount" element={<CreateAccount setAuth={setAuth} />} />
-      <Route path="/threads" element={<CommunityThreads />} />
-      <Route path="/threads/:title" element={<ThreadDetail />} />
+      <Route path="/threads" element={<CommunityThreads auth={auth} />} />
+      <Route path="/threads/:threadId" element={<ThreadDetail auth={auth} />} />
     </Routes>
   );
 }
+
 
 /**
  * Home: this is your original App UI.
