@@ -1,4 +1,7 @@
 import { useState } from "react";
+import { useEffect } from "react";
+import bear from "./assets/bear.webp";
+// NEW: allow in-app links + route definitions
 import { Routes, Route, Link } from "react-router-dom";
 import React from "react";
 import bear from "./assets/bear.webp";
@@ -17,6 +20,7 @@ import ThreadDetail from "./pages/ThreadDetail.jsx";
  * - "/threads"      -> Community threads list
  * - "/threads/:title" -> Single thread detail
  */
+
 export default function App({ auth, setAuth }) {
   return (
     <Routes>
@@ -48,6 +52,7 @@ function Home({ auth, setAuth }) {
   const [currentGame, setCurrentGame] = useState(null);
   const [stars, setStars] = useState(0);
   const [review, setReview] = useState("");
+  const [library, setLibrary] = useState([]); // IDs of items in the user's library
   const [ratings, setRatings] = useState({}); // { mediaId: { stars, review } }
   const [libraryIds, setLibraryIds] = useState([]);
 
@@ -56,7 +61,6 @@ function Home({ auth, setAuth }) {
   const [yearFrom, setYearFrom] = useState("");
   const [yearTo, setYearTo] = useState("");
   const [platformFilter, setPlatformFilter] = useState("");
-
   function applyFilters(list) {
     const yf = parseInt(yearFrom, 10);
     const yt = parseInt(yearTo, 10);
@@ -123,6 +127,20 @@ function Home({ auth, setAuth }) {
     },
   ];
 
+
+  function resetFilters() {
+    setTypeFilter("All");
+    setYearFrom("");
+    setYearTo("");
+    setPlatformFilter("");
+    // optionally reapply filters to update displayed items
+    setItems((prev) => applyFilters(prev));
+  }
+  // When the user submits the search:
+  // - prevent page reload
+  // - if box is empty, clear results
+  // - otherwise, call our Flask API (/search?q=...)
+  // - if backend fails, show a small warning + filter MOCK results as a fallback
   // search handler
   async function onSearch(e) {
     e.preventDefault();
@@ -246,6 +264,8 @@ function Home({ auth, setAuth }) {
       alert("Failed to submit rating.");
     }
   }
+}
+
 
   // logout helper
   function handleLogout() {

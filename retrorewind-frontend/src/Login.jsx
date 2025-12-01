@@ -2,11 +2,12 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import React from "react";
 
-export default function Login({ auth, setAuth }) {
+export default function Login() {
+  const navigate = useNavigate();
+
+  // keep track of what the user typed
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [message, setMessage] = useState("");
-  const navigate = useNavigate();
 
   // If user is already logged in, show log out option
   if (auth?.userId) {
@@ -26,7 +27,7 @@ export default function Login({ auth, setAuth }) {
     );
   }
 
-  // Simple login button just to test the UI for now
+  // runs when login button is clicked
   async function handleLogin(e) {
     e.preventDefault();
     try {
@@ -62,12 +63,13 @@ export default function Login({ auth, setAuth }) {
           RetroRewind Login
         </h1>
 
+        {/* login form */}
         <form onSubmit={handleLogin} className="flex flex-col gap-4">
           <input
             type="email"
             placeholder="Email"
             value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            onChange={(e) => setEmail(e.target.value)} // update email field
             className="rounded-lg bg-zinc-800 border border-zinc-700 px-3 py-2 focus:border-blue-600 outline-none"
           />
 
@@ -75,18 +77,21 @@ export default function Login({ auth, setAuth }) {
             type="password"
             placeholder="Password"
             value={password}
-            onChange={(e) => setPassword(e.target.value)}
+            onChange={(e) => setPassword(e.target.value)} // update password field
             className="rounded-lg bg-zinc-800 border border-zinc-700 px-3 py-2 focus:border-blue-600 outline-none"
           />
 
+          {/* disable button while logging in */}
           <button
             type="submit"
-            className="mt-2 bg-blue-600 hover:bg-blue-500 rounded-lg py-2 font-semibold transition"
+            disabled={loading}
+            className="mt-2 bg-blue-600 hover:bg-blue-500 rounded-lg py-2 font-semibold transition disabled:opacity-60"
           >
-            Log In
+            {loading ? "Logging in…" : "Log In"}
           </button>
         </form>
 
+        {/* shows errors or success messages */}
         {message && (
           <p className="mt-4 text-sm text-center text-amber-300">{message}</p>
         )}
@@ -94,3 +99,4 @@ export default function Login({ auth, setAuth }) {
     </div>
   );
 }
+
