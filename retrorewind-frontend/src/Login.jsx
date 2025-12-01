@@ -1,13 +1,16 @@
-import { useState } from "react";
+import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import React from "react";
 
-export default function Login() {
+export default function Login({ auth, setAuth }) {
   const navigate = useNavigate();
 
-  // keep track of what the user typed
+  // form fields
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+
+  // UI state
+  const [message, setMessage] = useState("");
+  const [loading, setLoading] = useState(false);
 
   // If user is already logged in, show log out option
   if (auth?.userId) {
@@ -30,6 +33,9 @@ export default function Login() {
   // runs when login button is clicked
   async function handleLogin(e) {
     e.preventDefault();
+    setMessage("");
+    setLoading(true);
+
     try {
       const res = await fetch("http://127.0.0.1:5000/login", {
         method: "POST",
@@ -46,13 +52,14 @@ export default function Login() {
         token: data.auth_token,
       });
 
-      alert(data.message);
-
-      // go to profile screen after login
+      setMessage(data.message || "Logged in!");
+      // go to home (or profile)
       navigate("/");
     } catch (err) {
       console.error(err);
       setMessage(err.message || "Login failed");
+    } finally {
+      setLoading(false);
     }
   }
 
@@ -69,7 +76,7 @@ export default function Login() {
             type="email"
             placeholder="Email"
             value={email}
-            onChange={(e) => setEmail(e.target.value)} // update email field
+            onChange={(e) => setEmail(e.target.value)}
             className="rounded-lg bg-zinc-800 border border-zinc-700 px-3 py-2 focus:border-blue-600 outline-none"
           />
 
@@ -77,11 +84,10 @@ export default function Login() {
             type="password"
             placeholder="Password"
             value={password}
-            onChange={(e) => setPassword(e.target.value)} // update password field
+            onChange={(e) => setPassword(e.target.value)}
             className="rounded-lg bg-zinc-800 border border-zinc-700 px-3 py-2 focus:border-blue-600 outline-none"
           />
 
-          {/* disable button while logging in */}
           <button
             type="submit"
             disabled={loading}
@@ -91,7 +97,6 @@ export default function Login() {
           </button>
         </form>
 
-        {/* shows errors or success messages */}
         {message && (
           <p className="mt-4 text-sm text-center text-amber-300">{message}</p>
         )}
@@ -99,4 +104,3 @@ export default function Login() {
     </div>
   );
 }
-

@@ -146,7 +146,7 @@ const deleteThread = async (thread, e) => {
         </button>
       </div>
 
-      <h1 className="text-3xl font-bold mb-6">🎮 Community Threads</h1>
+      <h1 className="text-3xl font-bold mb-6"> Community Threads</h1>
 
       <form
         onSubmit={handleSubmit}

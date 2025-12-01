@@ -159,21 +159,46 @@ function Home({ auth, setAuth }) {
 
   // Ratings 
   async function submitRating() {
-    if (!stars) return alert("Please select a star rating first.");
+    if (!auth?.userId) {
+      alert("Please log in to rate items.");
+      return;
+    }
+  
+    if (!stars) {
+      alert("Please select a star rating first.");
+      return;
+    }
+  
     try {
       const res = await fetch("http://127.0.0.1:5000/ratings", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          user_id: "1",
+          user_id: auth.userId,
           media_id: currentGame.id,
+          title: currentGame.title,
+          cover_url: currentGame.coverUrl,
+          type: currentGame.type,
+          year: currentGame.year,
           stars,
           review_text: review,
         }),
       });
-      if (!res.ok) throw new Error(await res.text());
-      await res.json();
+  
+      const data = await res.json();
+  
+      if (res.status === 409) {
+        alert("You already rated this item. You can edit or delete it from your profile.");
+        return;
+      }
+  
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to submit rating.");
+      }
+  
       alert("Thanks for rating!");
+  
+      // local UI-only storage for the cards
       setRatings((prev) => ({
         ...prev,
         [currentGame.id]: { stars, review },
@@ -182,9 +207,56 @@ function Home({ auth, setAuth }) {
       setStars(0);
       setReview("");
     } catch (e) {
+      console.error(e);
       alert("Failed to submit rating.");
     }
   }
+  
+
+  async function addToLibrary(item) {
+    if (!auth?.userId) {
+      alert("Please log in to add items to your library.");
+      return;
+    }
+  
+    try {
+      const res = await fetch(
+        `http://127.0.0.1:5000/profile/${auth.userId}/library/add`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            // Authorization: `Bearer ${auth.token}`, // if needed
+          },
+          body: JSON.stringify({
+            id: item.id,
+            title: item.title,
+            type: item.type,
+            year: item.year,
+          }),
+        },
+      );
+  
+      const data = await res.json();
+  
+      if (res.status === 409) {
+        alert("That item is already in your library.");
+        return;
+      }
+  
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to add to library.");
+      }
+  
+      alert("Added to your library!");
+    } catch (err) {
+      console.error(err);
+      alert("Server error adding to library.");
+    }
+  }
+  
+  
+  
 
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100">
@@ -376,9 +448,13 @@ function Home({ auth, setAuth }) {
                 </p>
                 {/* actions */}
                 <div className="mt-4 flex flex-col gap-2">
-                  <button className="rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-1.5 text-sm hover:bg-zinc-700">
+                <button
+                    className="rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-1.5 text-sm hover:bg-zinc-700"
+                    onClick={() => addToLibrary(m)}
+                  >
                     Add to Library
                   </button>
+
 
                   {ratings[m.id] && (
                     <div className="mt-1 text-sm text-amber-400">

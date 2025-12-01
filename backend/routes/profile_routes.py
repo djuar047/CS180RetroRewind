@@ -51,13 +51,14 @@ def update_profile(user_id):
 
 # ------------------ LIBRARY (WATCHLIST) ------------------ #
 
-@profile_bp.post("/profile/<user_id>/library/add")
+@profile_bp.route("/profile/<user_id>/library/add", methods=["POST"])
 def add_to_library(user_id):
     """
     Add a media item into the user's library (watchlist).
     Expects JSON with: id, title, type, optional year & coverUrl.
+    Prevents duplicates per user + media id.
     """
-    data = request.json or {}
+    data = request.get_json() or {}
 
     if not all([data.get("id"), data.get("title"), data.get("type")]):
         return jsonify({"error": "missing_fields"}), 400
@@ -86,6 +87,16 @@ def add_to_library(user_id):
         upsert=True,
     )
 
+    # 🔍 check if this media is already in the user's library
+    existing = db["users"].find_one(
+        {
+            "_id": ObjectId(user_id),
+            "profile.library.id": media["id"],  # check by media id
+        }
+    )
+    if existing:
+        return jsonify({"error": "already_in_library"}), 409
+
     # Push item into library array
     result = db["users"].update_one(
         {"_id": ObjectId(user_id)},
@@ -95,7 +106,8 @@ def add_to_library(user_id):
     if result.modified_count == 0:
         return jsonify({"error": "user_not_found"}), 404
 
-    return jsonify({"message": "Added to watchlist", "item": media})
+    return jsonify({"message": "Added to watchlist", "item": media}), 201
+
 
 
 @profile_bp.get("/profile/<user_id>/library")
@@ -115,29 +127,31 @@ def get_library(user_id):
 @profile_bp.get("/profile/<user_id>/ratings")
 def get_user_ratings(user_id):
     """
-    Return all ratings written by this user.
-    This is the /profile/<user_id>/ratings route from your big app.py.
+    Return all ratings for a given user, formatted for the Profile page.
+    Handles user_id stored as ObjectId or as a plain string.
     """
-    # Try to treat the user_id as an ObjectId first
-    try:
+    # figure out how user_id is stored in the ratings collection
+    if ObjectId.is_valid(user_id):
         uid = ObjectId(user_id)
-    except Exception:
+    else:
         uid = user_id
 
-    ratings = list(db["ratings"].find({"user_id": uid}))
+    cursor = db["ratings"].find({"user_id": uid})
 
-    fixed = []
-    for r in ratings:
-        fixed.append({
-            "rating_id": str(r["_id"]),
-            "media_id": str(r["media_id"]),
-            "title": r.get("title", ""),
-            "cover_url": r.get("cover_url", ""),
-            "type": r.get("type", ""),
-            "year": r.get("year", ""),
-            "stars": r.get("stars"),
-            "review_text": r.get("review_text", ""),
-            "date_created": r.get("date_created"),
-        })
+    ratings = []
+    for r in cursor:
+        ratings.append(
+            {
+                "rating_id": str(r["_id"]),
+                "media_id": r.get("media_id", ""),
+                "title": r.get("title", ""),
+                "cover_url": r.get("cover_url", ""),
+                "type": r.get("type", ""),
+                "year": r.get("year", ""),
+                "stars": r.get("stars", 0),
+                "review_text": r.get("review_text", ""),
+                "date_created": r.get("date_created"),
+            }
+        )
 
-    return jsonify(fixed), 200
+    return jsonify(ratings), 200
