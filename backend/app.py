@@ -281,7 +281,7 @@ def add_to_library(user_id):
         return jsonify({"error": "missing_fields"}), 400
 
     media = {
-        "id": data.get("id"),
+        "id": int(data.get("id")),
         "title": data.get("title"),
         "type": data.get("type"),
         "year": data.get("year", ""),

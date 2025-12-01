@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import React from "react";
 
 export default function Login() {
   const navigate = useNavigate();
@@ -8,83 +9,50 @@ export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
-  // small messages (error / success)
-  const [message, setMessage] = useState("");
-  const [loading, setLoading] = useState(false);
+  // If user is already logged in, show log out option
+  if (auth?.userId) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-zinc-950 text-zinc-100">
+        <p className="text-center text-amber-300 mb-4">
+          You are already logged in. Please log out first to log in as another
+          user.
+        </p>
+        <button
+          onClick={() => setAuth({ userId: null, token: null })}
+          className="bg-red-600 hover:bg-red-500 px-4 py-2 rounded-lg text-white"
+        >
+          Log Out
+        </button>
+      </div>
+    );
+  }
 
   // runs when login button is clicked
   async function handleLogin(e) {
     e.preventDefault();
-
-    // quick empty-field check
-    if (!email || !password) {
-      setMessage("Please enter both email and password.");
-      return;
-    }
-
-    setLoading(true);
-    setMessage("");
-
     try {
-      // ask backend to log into Firebase for us
-      const firebaseRes = await fetch("http://127.0.0.1:5000/auth/login", {
+      const res = await fetch("http://127.0.0.1:5000/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password }),
       });
 
-      const firebaseData = await firebaseRes.json();
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Login failed");
 
-      // if Firebase rejects the login → show message
-      if (!firebaseRes.ok) {
-        setMessage(firebaseData.error || "Login failed.");
-        setLoading(false);
-        return;
-      }
-
-      // Firebase gave us an idToken + UID (proof user is real)
-      const idToken = firebaseData.idToken;
-      const uid = firebaseData.uid;
-
-      // link Firebase user to MongoDB user (create if missing)
-      const mongoRes = await fetch("http://127.0.0.1:5000/auth/link-mongo", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          id_token: idToken,
-          username: email.split("@")[0], // temp username based on email
-        }),
+      // store userId and token globally
+      setAuth({
+        userId: data.user_id,
+        token: data.auth_token,
       });
 
-      const mongoData = await mongoRes.json();
+      alert(data.message);
 
-      // if backend failed to link account
-      if (!mongoRes.ok) {
-        setMessage(mongoData.error || "Failed to link account.");
-        setLoading(false);
-        return;
-      }
-
-      // store info so other pages know the user is logged in
-      localStorage.setItem("idToken", idToken);
-      localStorage.setItem("firebase_uid", uid);
-      localStorage.setItem("mongo_user_id", mongoData.mongo_user_id);
-      localStorage.setItem("rr_email", email); // profile needs this later
-
-      // go to profile page with email included
-      setMessage("Login successful! Redirecting...");
-      setTimeout(
-        () =>
-          navigate("/profile", {
-            state: { email }, // lets profile update right away
-          }),
-        700
-      );
+      // go to profile screen after login
+      navigate("/");
     } catch (err) {
       console.error(err);
-      setMessage("Something went wrong. Try again.");
-    } finally {
-      setLoading(false);
+      setMessage(err.message || "Login failed");
     }
   }
 
