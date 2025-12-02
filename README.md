@@ -49,19 +49,6 @@ npm install
 
 ---
 
-## Configuration
-
-Create a file named `.env` in the root directory (same level as `app.py`) and add:
-```
-CLIENT_ID=8e7zlhcv2vkiih8l9fa1j0v3dvi11i
-CLIENT_SECRET=v0wy5tkd7sqortwru98lcjtgz0mwf8
-MONGO_URI=mongodb+srv://Cluster52873:fUxudFp%2BUXx2@cluster52873.cjyxx8v.mongodb.net/retro_rewind?retryWrites=true&w=majority
-OMDB_API_KEY=5db94d70
-SECONDARY_DB_URI=mongodb+srv://Cluster52873:fUxudFp%2BUXx2@cluster52873.cjyxx8v.mongodb.net/?appName=Cluster52873
-```
-
----
-
 ## Running the Application
 
 ### Start the Backend
