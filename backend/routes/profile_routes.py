@@ -155,3 +155,5 @@ def get_user_ratings(user_id):
         )
 
     return jsonify(ratings), 200
+
+

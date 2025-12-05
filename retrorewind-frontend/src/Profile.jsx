@@ -330,12 +330,7 @@ export default function Profile({ auth }) {
                   <p className="text-sm text-zinc-400">{item.type}</p>
                   <p className="text-sm text-zinc-500">{item.year}</p>
                 </div>
-                <button
-                  onClick={() => removeFromLibrary(item.id)}
-                  className="ml-4 text-red-400 hover:text-red-300 text-sm px-2 py-1 border border-red-400 rounded"
-                >
-                  Remove
-                </button>
+               
               </div>
             ))
           ) : (
