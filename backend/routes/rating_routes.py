@@ -12,13 +12,17 @@ rating_bp = Blueprint("ratings_bp", __name__)
 @rating_bp.post("/ratings")
 def submit_rating():
     data = request.json or {}
-    user_id = data.get("user_id")          # should be mongo_user_id
-    media_id = str(data.get("media_id"))   # store as string
+    user_id = data.get("user_id")
+    media_id = data.get("media_id")
     stars = data.get("stars")
     review_text = data.get("review_text", "")
 
+    # Check if all required fields are present and not None
     if not all([user_id, media_id, stars]):
         return jsonify({"error": "missing_fields"}), 400
+    
+    # Convert media_id to string (it might be a number)
+    media_id = str(media_id)
 
     # handle both ObjectId and string user_id
     try:
