@@ -21,7 +21,7 @@ fi
 # ---- Install  backend dependencies ----
 echo "Installing required packages..."
 pip install --upgrade pip
-pip install flask flask_cors pymongo python-dotenv requests 
+pip install flask flask_cors pymongo python-dotenv requests bcrypt
 
 # ---- Create .env if missing ----
 if [ ! -f .env ]; then
