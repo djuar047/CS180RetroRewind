@@ -63,12 +63,13 @@ echo "     npm run dev"
 echo
 echo "=============================="
 echo ""
+cd ..
 echo "Starting backend in new Terminal window..."
 osascript -e 'tell application "Terminal"
-    do script "cd '"$(pwd)"'/backend && ./run_backend.sh"
+    do script "cd '"$(pwd)"' && ./run_backend.sh"
 end tell'
 
 echo "Starting frontend in new Terminal window..."
 osascript -e 'tell application "Terminal"
-    do script "cd '"$(pwd)"'/retrorewind-frontend && ./run_frontend.sh"
+    do script "cd '"$(pwd)"' && ./run_frontend.sh"
 end tell'
