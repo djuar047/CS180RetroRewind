@@ -1,4 +1,4 @@
-import { useState } from "react";
+import React, { useState } from "react";
 import { Routes, Route, Link } from "react-router-dom";
 import { useEffect } from "react";
 
@@ -19,8 +19,15 @@ import ThreadDetail from "./pages/ThreadDetail.jsx";
  * - "/createAccount" -> Create account
  */
 
-export default function App() {
-  const [auth, setAuth] = useState({ userId: null, token: null });
+export default function App({ auth: authProp, setAuth: setAuthProp }) {
+  const [auth, setAuth] = useState(authProp || { userId: null, token: null });
+
+  // Update auth when prop changes
+  useEffect(() => {
+    if (authProp) {
+      setAuth(authProp);
+    }
+  }, [authProp]);
 
   return (
     <Routes>

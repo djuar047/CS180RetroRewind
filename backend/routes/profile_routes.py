@@ -11,7 +11,11 @@ profile_bp = Blueprint("profile_bp", __name__)
 @profile_bp.get("/profile/<user_id>")
 def get_profile(user_id):
     """Return basic profile info for a user."""
-    user_doc = db["users"].find_one({"_id": ObjectId(user_id)})
+    try:
+        user_doc = db["users"].find_one({"_id": ObjectId(user_id)})
+    except Exception:
+        return jsonify({"error": "invalid_id"}), 400
+    
     if not user_doc:
         return jsonify({"error": "user_not_found"}), 404
 
@@ -109,7 +113,6 @@ def add_to_library(user_id):
     return jsonify({"message": "Added to watchlist", "item": media}), 201
 
 
-
 @profile_bp.get("/profile/<user_id>/library")
 def get_library(user_id):
     """Return the list of items in the user's library."""
@@ -120,6 +123,26 @@ def get_library(user_id):
         return jsonify({"error": "User not found"}), 404
 
     return jsonify(user_doc.get("profile", {}).get("library", []))
+
+
+@profile_bp.delete("/profile/<user_id>/library/<item_id>")
+def delete_from_library(user_id, item_id):
+    """
+    Remove a media item from the user's library by its id.
+    """
+    result = db["users"].update_one(
+        {"_id": ObjectId(user_id)},
+        {"$pull": {"profile.library": {"id": item_id}}}
+    )
+
+    if result.modified_count == 0:
+        # Either user doesn't exist or item wasn't in library
+        user_exists = db["users"].find_one({"_id": ObjectId(user_id)})
+        if not user_exists:
+            return jsonify({"error": "user_not_found"}), 404
+        return jsonify({"error": "item_not_found"}), 404
+
+    return jsonify({"message": "Item removed from library"}), 200
 
 
 # ------------------ USER'S RATINGS ------------------ #

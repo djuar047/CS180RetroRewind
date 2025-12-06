@@ -1,22 +1,11 @@
 // src/Profile.jsx
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 
 export default function Profile({ auth }) {
   const userId = auth?.userId;
   const token = auth?.token;
   const navigate = useNavigate();
-
-  // Guard if user is not logged in
-  if (!userId || !token) {
-    return (
-      <div className="min-h-screen bg-zinc-950 text-zinc-100 flex items-center justify-center">
-        <p className="text-center text-zinc-300">
-          You must be logged in to view your profile.
-        </p>
-      </div>
-    );
-  }
 
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -32,6 +21,11 @@ export default function Profile({ auth }) {
 
   // ---------- FETCH PROFILE ----------
   useEffect(() => {
+    if (!userId || !token) {
+      setLoading(false);
+      return;
+    }
+
     async function fetchProfile() {
       try {
         const res = await fetch(`http://127.0.0.1:5000/profile/${userId}`, {
@@ -214,6 +208,17 @@ export default function Profile({ auth }) {
     return (
       <p className="text-center mt-10 text-zinc-300">Loading profile…</p>
     );
+    
+  if (!userId || !token) {
+    return (
+      <div className="min-h-screen bg-zinc-950 text-zinc-100 flex items-center justify-center">
+        <p className="text-center text-zinc-300">
+          You must be logged in to view your profile.
+        </p>
+      </div>
+    );
+  }
+  
   if (error)
     return <p className="text-center mt-10 text-red-400">{error}</p>;
   if (!user) return null;
