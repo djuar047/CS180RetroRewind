@@ -76,6 +76,34 @@ Open your browser and go to: **http://localhost:5173**
 
 ---
 
+## Quick Start with Executables
+
+To simplify setup and launching the project, we provide helper scripts:
+
+### Starting Everything Automatically
+
+From the project root:
+```bash
+./script.sh
+```
+
+### Starting Each Component Manually
+
+Backend:
+```bash
+./run_backend.sh
+```
+
+Frontend:
+```bash
+./run_frontend.sh
+```
+
+
+
+
+---
+
 ## Running Tests
 
 ### Backend Tests
