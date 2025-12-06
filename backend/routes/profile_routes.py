@@ -129,10 +129,18 @@ def get_library(user_id):
 def delete_from_library(user_id, item_id):
     """
     Remove a media item from the user's library by its id.
+    Supports ids stored as strings or numbers.
     """
+    # support both "123" and 123
+    possible_ids = [item_id]
+    try:
+      possible_ids.append(int(item_id))
+    except ValueError:
+      pass
+
     result = db["users"].update_one(
         {"_id": ObjectId(user_id)},
-        {"$pull": {"profile.library": {"id": item_id}}}
+        {"$pull": {"profile.library": {"id": {"$in": possible_ids}}}},
     )
 
     if result.modified_count == 0:
@@ -143,6 +151,7 @@ def delete_from_library(user_id, item_id):
         return jsonify({"error": "item_not_found"}), 404
 
     return jsonify({"message": "Item removed from library"}), 200
+
 
 
 # ------------------ USER'S RATINGS ------------------ #
